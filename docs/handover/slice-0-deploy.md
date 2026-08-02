@@ -156,6 +156,24 @@ The route list in `src/App.vue` is `/studio` and `/listen` only. Do not reintrod
 - No RSS. If it ever returns, the blob proxy must be off-box: everything in this ecosystem shares
   `51.77.135.129`, and podcast bursts would starve the firehose listener.
 
+## The appview dependency
+
+The public tier of `/listen` needs `remanso-jetstream` to index `space.remanso.recording`, which it
+does not. **An executable plan for that work is written up at
+`/home/jean/projects/remanso-jetstream/docs/plans/2026-08-02-index-recordings.md`** — migration, the
+`recording` table, ingest handlers, `GET /recordings` + `GET /:did/recordings`, a backfill script,
+tests and OpenAPI. It is uncommitted in that repo, for a session working there to review and own.
+
+Two things from it that bear on remanso.at:
+
+- **Response shape** is `{ recordings: [...], cursor? }` with `blobCid` + `mimeType` + `size` per row
+  and **no ready-made blob URL** — the client resolves the PDS and builds the `getBlob` URL, so a
+  cached response cannot go stale after a PDS migration.
+- **`space.remanso.recording` has no `discoverable` field**, so a note marked `discoverable: false`
+  would still have its audio in the public recordings feed. The plan ships the column defaulted to
+  listable and flags the decision rather than settling it. If the answer is "add the field", the
+  studio's publish path here has to write it.
+
 ## Still open
 
 - **Rotate the Gitea PAT.** It was exposed in cleartext in the session transcript that produced
