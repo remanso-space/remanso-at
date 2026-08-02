@@ -17,6 +17,7 @@
   "dependencies": {
     "@atproto/oauth-client-browser": "^0.3.42",
     "daisyui": "^5.7.9",
+    "mediabunny": "^1.52.2",
     "vue": "^3.5.40",
     "vue-router": "^4.6.4"
   },

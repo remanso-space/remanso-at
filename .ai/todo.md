@@ -26,7 +26,10 @@
 - [x] Pause/silence detection: `src/modules/studio/pauses.ts` — rmsEnvelopeDb, detectSilences (two-threshold hysteresis off measured floor + dynamic-range guard against cutting speech), planCuts (head/tail full, interior→350ms) + 11 specs. Emits EDL cut regions, never processed audio.
 - [ ] Wire cuts → EDL edits (split clip at each cut boundary, drop the middle, ripple) + review UI (slice 5 shares it).
 - [x] Render chain DSP (pure, seam-free): `src/modules/studio/renderChain.ts` — RBJ HPF + presence shelf (persistent biquad state), two-pass loudness normalize to -16, look-ahead limiter with hard -1 dBFS guarantee (sliding-window-max deque). `renderProgramme(pcm, sr, chain)`. 9 specs incl. windowed-equality + ceiling guarantee. (expander/compressor = later "podcast voice" increment)
-- [ ] Wire renderer to EDL+mediabunny: assemble speech PCM from clips (AudioBufferSink windows) → renderProgramme → mediabunny audioBufferSource encode. In a Worker.
+- [x] EDL→PCM assembly (pure): `studio/assemble.ts` — assembleSpeech (clips→timeline PCM, trims/placement/gain/equal-power fades, pause-cut ripple), renderSession (assemble→renderProgramme). 8 specs.
+- [x] Pure PCM helpers: `studio/pcm.ts` — downmixToMono, resampleLinear. 7 specs.
+- [x] Codec wrappers (browser, compile-clean, runtime-pending): `studio/mediaCodec.ts` — canEncodeOpus gate, decodeTakeToMono (mediabunny AudioBufferSink stream→mono@rate), encodeOpus (AudioBufferSource→WebM/Opus File), bitrateFor. mediabunny dep added.
+- [ ] Move render to a Worker (currently synchronous; fine for slice-4 lengths, revisit if it blocks UI).
 - [ ] canEncodeAudio("opus") gate at session start; refuse clearly.
 - [x] Publish deliverable (pure): `recordingMarkdownLink(atUri, title)` → `![<title> - audio](at://…)` + round-trip test. Write path `uploadRecording` already mirrored.
 - [ ] Opus encode (mediabunny/WebCodecs) + `canEncodeAudio("opus")` gate at session start (single point of failure — refuse clearly) → uploadRecording → link. [browser-coupled]

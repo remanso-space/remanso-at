@@ -1,0 +1,148 @@
+import { MAX_RECORDING_BYTES } from "../atproto/recording.types"
+import { downmixToMono, resampleLinear } from "./pcm"
+
+// The browser-coupled edges of the render: decode a recorded take to mono PCM at the
+// session rate, and encode the finished programme to Opus. Both mirror the proven
+// mediabunny usage in remanso.space's normalizeAudioFile.ts (same version), narrowed to
+// what the studio needs. canEncodeAudio("opus") is the studio's single point of failure —
+// there is no original to fall back to — so it is checked at session start and refused
+// clearly. Unit tests cannot exercise WebCodecs in jsdom; this is verified in the app.
+
+const PREFERRED_BITRATE = 96_000
+const MIN_BITRATE = 32_000
+const SIZE_SAFETY = 0.9
+
+/** A bitrate that lands the encode under the 50 MB blob ceiling; mirrors normalizeAudioFile. */
+export const bitrateFor = (durationSec: number): number => {
+  if (durationSec <= 0) return PREFERRED_BITRATE
+  const budget = (MAX_RECORDING_BYTES * 8 * SIZE_SAFETY) / durationSec
+  return Math.max(MIN_BITRATE, Math.min(PREFERRED_BITRATE, Math.floor(budget)))
+}
+
+// Lazy import so the demuxers stay off the initial bundle, narrowed to the containers a
+// browser MediaRecorder actually produces plus the file-import formats.
+const loadMediabunny = async () => {
+  const {
+    ADTS,
+    AudioBufferSink,
+    AudioBufferSource,
+    BlobSource,
+    BufferTarget,
+    canEncodeAudio,
+    FLAC,
+    Input,
+    MATROSKA,
+    MP3,
+    MP4,
+    Output,
+    OGG,
+    QTFF,
+    WAVE,
+    WEBM,
+    WebMOutputFormat,
+  } = await import("mediabunny")
+  return {
+    AudioBufferSink,
+    AudioBufferSource,
+    BlobSource,
+    BufferTarget,
+    canEncodeAudio,
+    Input,
+    Output,
+    WebMOutputFormat,
+    formats: [MP4, QTFF, MATROSKA, WEBM, MP3, WAVE, OGG, ADTS, FLAC],
+  }
+}
+
+/** The capability gate. False means the studio must refuse — there is no fallback. */
+export const canEncodeOpus = async (): Promise<boolean> => {
+  try {
+    const { canEncodeAudio } = await loadMediabunny()
+    return await canEncodeAudio("opus")
+  } catch {
+    return false
+  }
+}
+
+export interface DecodedTake {
+  samples: Float32Array
+  durationSec: number
+}
+
+/**
+ * Decode a recorded take to mono at the target rate, streaming so an hour of audio is
+ * never fully resident twice. Each decoded buffer is downmixed and resampled, then the
+ * pieces are joined once at the end.
+ */
+export const decodeTakeToMono = async (
+  file: File,
+  targetRate: number,
+): Promise<DecodedTake | null> => {
+  const { AudioBufferSink, BlobSource, Input, formats } = await loadMediabunny()
+  const input = new Input({ formats, source: new BlobSource(file) })
+
+  const track = await input.getPrimaryAudioTrack()
+  if (!track) return null
+
+  const channels = await track.getNumberOfChannels()
+  const durationSec = await track.computeDuration()
+
+  const pieces: Float32Array[] = []
+  let total = 0
+  for await (const { buffer } of new AudioBufferSink(track).buffers()) {
+    const chans = Array.from({ length: channels }, (_, c) => buffer.getChannelData(c))
+    const mono = resampleLinear(downmixToMono(chans), buffer.sampleRate, targetRate)
+    pieces.push(mono)
+    total += mono.length
+  }
+
+  const samples = new Float32Array(total)
+  let at = 0
+  for (const piece of pieces) {
+    samples.set(piece, at)
+    at += piece.length
+  }
+  return { samples, durationSec }
+}
+
+export interface EncodedRecording {
+  file: File
+  mimeType: string
+}
+
+/**
+ * Encode a mono programme to Opus in a WebM container and hand back a File ready for
+ * uploadBlob. The AudioBuffer is built with its standalone constructor, so no AudioContext
+ * is created; samples are fed in windows to respect encoder backpressure.
+ */
+export const encodeOpus = async (
+  mono: Float32Array,
+  sampleRate: number,
+  durationSec: number,
+  name = "episode.weba",
+): Promise<EncodedRecording | null> => {
+  const { AudioBufferSource, BufferTarget, Output, WebMOutputFormat } = await loadMediabunny()
+
+  const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() })
+  const source = new AudioBufferSource({ codec: "opus", bitrate: bitrateFor(durationSec) })
+  output.addAudioTrack(source)
+  await output.start()
+
+  const WINDOW = sampleRate // one second per AudioBuffer
+  for (let start = 0; start < mono.length; start += WINDOW) {
+    const length = Math.min(WINDOW, mono.length - start)
+    const buffer = new AudioBuffer({ length, sampleRate, numberOfChannels: 1 })
+    // A fresh, ArrayBuffer-backed view; a subarray of `mono` types as ArrayBufferLike,
+    // which copyToChannel rejects.
+    const chunk = new Float32Array(length)
+    chunk.set(mono.subarray(start, start + length))
+    buffer.copyToChannel(chunk, 0)
+    await source.add(buffer)
+  }
+
+  await output.finalize()
+  const encoded = output.target.buffer
+  if (!encoded) return null
+
+  return { file: new File([encoded], name, { type: "audio/webm" }), mimeType: "audio/webm" }
+}
