@@ -1,35 +1,36 @@
-# Slice 2 — ATProto sign-in
+# Slice 4 — studio: capture → link
 
-## Plan
+## Slice 2 loose ends (DONE 2026-08-02)
 
-- [ ] Confirm slice-1 committed (done: 94f30a8) + nginx client-metadata block intact (verified)
-- [ ] Add deps: `@atproto/oauth-client-browser@^0.3.41`, `vue-router@^4.5.1`
-- [ ] Mirror `src/modules/atproto/service/atprotoOAuth.ts` (one string: client_id → remanso.at)
-- [ ] `src/modules/atproto/service/atprotoSession.ts` — localStorage, not PouchDB
-- [ ] `src/composables/useSession.ts` — auth state + `?handle=` prefill then router.replace strip
-- [ ] Copy lexicon JSONs → `lexicons/space/remanso/{note,recording}.json`
-- [ ] Hand-write types: `publicNote.types.ts` (fontSize:number, theme, discoverable, language), `recording.types.ts`
-- [ ] Install vue-router: `src/router.ts`, wire in `main.ts`
-- [ ] Split `App.vue` → shell (nav + router-view + footer) ; `views/HomeView.vue` (the ode body)
-- [ ] `views/StudioView.vue` — signed-out pitch, not a redirect ; `views/ListenView.vue` — placeholder
-- [ ] `components/SignIn.vue` in nav
-- [ ] Promote nav anchors + room cards to real route links
-- [ ] Cross-link from remanso.space nav carrying `?handle=`
-- [ ] Gates: pnpm build (zero warnings) + lint + fmt:check
-- [ ] README macroplan: mark "ATProto sign-in" delivered ; write docs/handover/slice-2-*.md
-- [ ] Push (Gitea+GitHub), verify live
+- [x] Live bundle stuck on slice-1 (`index-DPF8Ao1p.js`) — Coolify deploy never ran during apoena→marque migration. Triggered redeploy via Coolify API; live now `index-DKX4TXpw.js` (slice-2). apex 200/ssl ok, www 301, /studio 200, client-metadata `Remanso Studio`.
+- [x] Both repos' commits present on Gitea AND GitHub (remanso-at `4b73317`, remanso `1107b6d`) — no split mirror, no push needed.
+- [x] apoena.dev NOT retired — git.apoena.dev + platform.apoena.dev reachable; no origin/webhook re-point needed.
+- [ ] Browser-verify OAuth end-to-end (needs interactive atproto login) — sign-in was already browser-verified in slice 2; deferred pending live login.
 
-## Review (done 2026-08-03)
+## Slice 4 groundwork — increment 1: mirror pure primitives + test harness (DONE)
 
-- All items complete. `pnpm build` (zero warnings), `pnpm lint`, `pnpm fmt:check` clean.
-- remanso.space cross-link added (`WelcomeWorld.vue` nav `Studio ↗` with `?handle=`); its lint + typecheck clean.
-- `core-js` build-script decision recorded in `pnpm-workspace.yaml` (false) so Docker `--frozen-lockfile` won't fail.
-- Main JS chunk ~421 kB from eager `BrowserOAuthClient` — noted in handover, code-split later if needed.
+- [x] Mirror verbatim (+ specs): loudness, parseAtUri, shortDid, withATProtoImages, formatDuration (AudioLevels.vue deferred to capture increment — needs sass, no consumer yet)
+- [x] Mirror uploadRecording (+ spec) — `@/` imports rewritten to relative
+- [x] Test harness: vitest + @vue/test-utils + jsdom; standalone `vitest.config.ts` (vite7/vite8 type split — kept out of tsconfig); src/test/setup.ts; `test`/`test:run` scripts; esbuild build-script decision (false) in pnpm-workspace.yaml
+- [x] Green: 60 tests pass (6 files), build clean (zero warnings, font @import line 1), lint, fmt:check
+- NOT pushed — awaiting go-ahead (push auto-deploys)
 
-## Guardrails
+## Slice 4 remaining (later increments)
 
-- font @import stays line 1 of style.css, above `@import "tailwindcss"`
-- tailwind scan pinned source(none)+@source ; anything outside src/**/*.{vue,ts} needs its own @source
-- #ffa4c0 chrome byte-identical ; --hw-pink #e36598 editorial accent
-- no /ambient ; do not touch remanso-jetstream
-- sessions NOT shared with remanso.space (different origin/client) — two sign-ins by design
+- [ ] Capture: fork useAudioRecorder → useMicDevices / useCaptureGraph / useTakeRecorder (MIME_CANDIDATES, device picker, learned-gain, wall-clock elapsed, beforeunload). AudioContext pinned 48000, audioBitsPerSecond 96000, limiter -1 clip guard.
+- [ ] OPFS chunk streaming (ondataavailable → FileSystemWritableFileStream), one file per take; storage.estimate + persist warn; recover-session reconcile.
+- [ ] EDL types (Session/Take/Track/Clip/Chapter) + IndexedDB persistence behind a comlink Worker.
+- [ ] flag-while-recording (tap = mark, double-tap = retake) → take.flags.
+- [ ] Trim head/tail + remove-pauses (RMS envelope + hysteresis → EDL edits, review UI).
+- [ ] Windowed multi-track Worker renderer: speech chain (HPF 80 + expander + presence shelf + compressor + makeup) → sum cues → two-pass loudness -16 → look-ahead limiter -1. mediabunny AudioBufferSink + audioBufferSource encode.
+- [ ] canEncodeAudio("opus") gate at session start; refuse clearly.
+- [ ] Opus encode → uploadRecording → createRecord space.remanso.recording → copyable `![title - audio](at://…)`.
+- [ ] my-published-notes list: listRecords space.remanso.note, mark notes with `at://…/space.remanso.recording/` in content, prefill title/alt.
+- [ ] iOS Safari acceptance gate.
+- [ ] Suppress NewVersion toast while recording.
+- [ ] Never putRecord a note.
+
+## Wrap-up
+
+- [ ] README macroplan: mark "Studio — capture to link" delivered.
+- [ ] docs/handover/slice-4-*.md in slice-2 style.

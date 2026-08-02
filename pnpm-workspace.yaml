@@ -9,6 +9,10 @@
 # postinstall funding notice, not a native compile, so denying it changes nothing at runtime
 # and keeps the alpine image free of a build step. Left explicit so Docker's --frozen-lockfile
 # install does not fail with ERR_PNPM_IGNORED_BUILDS.
+# esbuild is a transitive dep of vite (and now vitest). Its binary ships in the per-platform
+# @esbuild/* optional package; the root postinstall is only a presence check, so denying it
+# changes nothing (vite build already worked this way in slices 0-2) and keeps the image lean.
 allowBuilds:
   core-js: false
+  esbuild: false
   sharp: false
