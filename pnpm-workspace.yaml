@@ -5,5 +5,10 @@
 # from remanso.space), so its native build is denied: it saves a slow compile and avoids
 # needing build tools in the alpine image. Without an explicit decision pnpm fails the
 # install with ERR_PNPM_IGNORED_BUILDS.
+# core-js arrives transitively (via @atproto/oauth-client-browser). Its build script is a
+# postinstall funding notice, not a native compile, so denying it changes nothing at runtime
+# and keeps the alpine image free of a build step. Left explicit so Docker's --frozen-lockfile
+# install does not fail with ERR_PNPM_IGNORED_BUILDS.
 allowBuilds:
+  core-js: false
   sharp: false

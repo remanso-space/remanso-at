@@ -67,10 +67,10 @@ learning = "The landing is the --hw-* token layer's first real consumer: slice 0
 
 [[feature]]
 name = "ATProto sign-in"
-start = 2026-08-10
+start = 2026-08-03
 original = 2026-08-17
-status = "on-track"
-note = "Own client-metadata.json as Remanso Studio; sessions cannot be shared with remanso.space."
+delivered = 2026-08-03
+learning = "Sign-in needed no new backend: client-metadata.json shipped in slice 1 and nginx already served it as application/json, so the real work was the router. Promoting the sold /studio and /listen from in-page anchors to real routes was the slice — deep links stay anonymous and /studio is a signed-out pitch, not a redirect. Handle and avatar both come from one public app.bsky.actor.getProfile call, so remanso.space's getAuthor and its @better-fetch/arktype deps stayed out. BrowserOAuthClient is eagerly imported by the nav sign-in, which pushed the main JS chunk to ~421 kB; code-split it if that starts to hurt."
 
 [[feature]]
 name = "Studio — capture to link"

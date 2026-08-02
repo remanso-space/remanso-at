@@ -1,0 +1,40 @@
+{
+  "lexicon": 1,
+  "id": "space.remanso.recording",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "An audio recording — a past stream, a podcast episode, a voice note — referenced from a Remanso note by at-uri.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["audio", "createdAt"],
+        "properties": {
+          "audio": {
+            "type": "blob",
+            "description": "The recording itself. video/mp4 and video/webm are accepted alongside audio/* because a PDS sniffs the container rather than trusting the upload's Content-Type: an audio-only MP4 or M4A sniffs as video/mp4, and a sniffer that reads no further than the EBML magic calls an audio-only WebM video/webm.",
+            "accept": ["audio/*", "video/mp4", "video/webm"],
+            "maxSize": 50000000
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "durationSec": {
+            "type": "integer",
+            "description": "Playback length in seconds."
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the audio was originally captured — a past stream's air date, not the upload time."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

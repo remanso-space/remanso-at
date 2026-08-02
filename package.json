@@ -13,8 +13,10 @@
     "fmt:check": "oxfmt --check"
   },
   "dependencies": {
+    "@atproto/oauth-client-browser": "^0.3.42",
     "daisyui": "^5.7.9",
-    "vue": "^3.5.40"
+    "vue": "^3.5.40",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
