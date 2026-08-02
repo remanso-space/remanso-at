@@ -11,14 +11,14 @@ This file only covers what slice 0 actually did and what a fresh session needs t
 A Vue 3 SPA on the apoena house stack, deployed at https://remanso.at, showing a holding page that
 names the three routes to come. No auth, no audio, no router yet.
 
-| | |
-| --- | --- |
-| Live | https://remanso.at (www 301s to apex) |
-| Gitea | https://git.apoena.dev/remanso-space/remanso-at |
-| GitHub mirror | https://github.com/remanso-space/remanso-at |
-| Coolify app | `pdwaatkwhp1fqthcmq2crrv3` |
-| Coolify project / server | `o4w3ghkux3zo3wm8gsxri5lg` / `adnwww057yrh5a1b1nfo5o26` |
-| Gitea webhook | id 35, push events, to `platform.apoena.dev/webhooks/source/gitea/events/manual` |
+|                          |                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| Live                     | https://remanso.at (www 301s to apex)                                            |
+| Gitea                    | https://git.apoena.dev/remanso-space/remanso-at                                  |
+| GitHub mirror            | https://github.com/remanso-space/remanso-at                                      |
+| Coolify app              | `pdwaatkwhp1fqthcmq2crrv3`                                                       |
+| Coolify project / server | `o4w3ghkux3zo3wm8gsxri5lg` / `adnwww057yrh5a1b1nfo5o26`                          |
+| Gitea webhook            | id 35, push events, to `platform.apoena.dev/webhooks/source/gitea/events/manual` |
 
 Versions installed: vite 8.2.0, vue 3.5.40, tailwindcss 4.3.3 (`@tailwindcss/vite`, no config
 file), daisyui 5.7.9, typescript ~6.0.2, vue-tsc 3.3.8, oxlint 1.76, oxfmt 0.61, pnpm 11.17.0
@@ -54,13 +54,20 @@ curl -o /dev/null -w '%{content_type}\n'  https://remanso.at/client-metadata.jso
   needs the same two-step.
 - **`packageManager` must be pinned in `package.json`.** The Dockerfile runs `corepack enable`,
   and without the pin corepack picks its own pnpm, which can reject the committed lockfile.
-- **`pnpm dev` does not land on 5173 here.** Other projects hold 5173-5179; this one came up on
-  5180. Read the port out of the dev server output instead of assuming, or you will test another
+- **`pnpm dev` does not land on 5173 here.** Other projects hold 5173-5179; this one came up on 5180. Read the port out of the dev server output instead of assuming, or you will test another
   app and misread the result.
 - **The Docker daemon is not running on this machine**, so the image could not be built locally.
   The Coolify build log is the only feedback loop for Dockerfile changes.
 - `set -a; source ~/.config/apoena/coolify.env; set +a` — plain `source` leaves the UUIDs
   unexported, and anything reading `os.environ` then fails.
+- **Tailwind v4's automatic source scan reads markdown, so docs were changing the CSS output.**
+  A local build produced 20768 bytes of CSS against production's 18000, because `.dockerignore`
+  strips markdown from the image but not from the working tree, and class names quoted in
+  README/docs prose were generating real rules. Fixed in `src/style.css` with
+  `@import "tailwindcss" source(none)` plus explicit `@source` lines scoped to `src/**/*.{vue,ts}`
+  and `index.html`; output dropped to 15847 bytes and is now identical everywhere. If you add a
+  directory of components outside `src/`, add an `@source` line for it or its classes silently
+  will not compile.
 
 ## Where slice 1 starts
 
@@ -110,5 +117,5 @@ No router is installed yet. Slice 1 can stay single-page; add `vue-router` when 
   `localStorage.setItem('macroplan:source', <the toml string>)` — the app migrates
   `macroplan:source` into a plan in `macroplan:library`, whose shape is
   `{version:1, activeId, plans:[{id, name, source}]}`.
-- The webhook has been created but a push-triggered auto-deploy has not been observed end to end
-  yet. The commit carrying this file is the first real test.
+  Nothing else. The push-to-deploy loop is verified: commit `6bbff99` triggered a deployment through
+  the Gitea webhook with no manual step, and it reached `finished`.

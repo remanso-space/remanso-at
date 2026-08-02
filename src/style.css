@@ -3,7 +3,14 @@
    precede all other rules, so a font import placed second is dropped by the build
    (with an "@import must precede all rules" warning) and the font never loads. */
 @import url("https://api.fonts.coollabs.io/css2?display=swap&family=Libertinus+Serif:ital,wght@0,400;0,700;1,400&family=Courier+Prime:wght@400;700");
-@import "tailwindcss";
+/* source(none) plus explicit @source lines instead of Tailwind v4's automatic project scan.
+   The auto-scan reads markdown too, so class names quoted in README/docs prose were generating
+   real CSS: a local build came out 20768 bytes against production's 18000, because
+   .dockerignore strips *.md from the image but not from the working tree. Scoping the scan to
+   app code makes local, CI and production builds byte-identical. */
+@import "tailwindcss" source(none);
+@source "./**/*.{vue,ts}";
+@source "../index.html";
 @plugin "daisyui";
 
 /* Overriding the built-in "light" theme rather than defining a new one, so the palette

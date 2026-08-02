@@ -4,5 +4,5 @@ dist
 .gitea
 .zed
 .vscode
-*.md
+**/*.md
 .env*
