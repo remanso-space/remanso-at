@@ -1,0 +1,148 @@
+// Pause detection: read a decoded take and emit *edits*, never processed audio (plan:
+// post-production item 2). An RMS envelope with hysteresis off the measured noise floor
+// finds the silences; the cut plan turns the long ones into timeline regions to remove.
+// The output is reviewable and each cut individually rejectable — a tool that silently
+// removes 4% of your episode is a tool nobody trusts, so it only ever proposes.
+
+export interface Silence {
+  startSec: number
+  endSec: number
+  /** Touches the very start or end of the take — head/tail, cut fully rather than shortened. */
+  edge: boolean
+}
+
+/** A region to remove from the timeline (a split-plus-drop on the EDL). */
+export interface Cut {
+  startSec: number
+  endSec: number
+}
+
+export interface PauseOptions {
+  /** RMS window; 20 ms is short enough to catch a gap, long enough to be stable. */
+  frameSec: number
+  /** dB above the noise floor at which silence is declared (the lower hysteresis edge). */
+  silenceMarginDb: number
+  /** dB above the floor at which speech resumes (the upper edge; must exceed silence). */
+  speechMarginDb: number
+  /** Silences shorter than this are the rhythm of speech, not pauses — left alone. */
+  minPauseSec: number
+  /** An interior pause is shortened to this; a comma's worth of breath. */
+  targetGapSec: number
+  /** The floor is the Nth percentile of frame energy — robust when most of the take is speech. */
+  floorPercentile: number
+}
+
+export const DEFAULT_PAUSE_OPTIONS: PauseOptions = {
+  frameSec: 0.02,
+  silenceMarginDb: 6,
+  speechMarginDb: 14,
+  minPauseSec: 0.5,
+  targetGapSec: 0.35,
+  floorPercentile: 0.1,
+}
+
+const FLOOR_DB = -100
+
+const frameDb = (samples: Float32Array, start: number, length: number): number => {
+  let sum = 0
+  const end = Math.min(start + length, samples.length)
+  for (let i = start; i < end; i += 1) sum += samples[i] * samples[i]
+  const n = end - start
+  if (n === 0) return FLOOR_DB
+  const rms = Math.sqrt(sum / n)
+  return rms > 0 ? Math.max(FLOOR_DB, 20 * Math.log10(rms)) : FLOOR_DB
+}
+
+/** dBFS per frame — exported for the waveform/analysis overlays that reuse it. */
+export const rmsEnvelopeDb = (
+  samples: Float32Array,
+  sampleRate: number,
+  frameSec: number,
+): number[] => {
+  const frame = Math.max(1, Math.round(frameSec * sampleRate))
+  const out: number[] = []
+  for (let start = 0; start < samples.length; start += frame) {
+    out.push(frameDb(samples, start, frame))
+  }
+  return out
+}
+
+const percentile = (values: number[], p: number): number => {
+  if (values.length === 0) return FLOOR_DB
+  const sorted = [...values].sort((a, b) => a - b)
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))
+  return sorted[index]
+}
+
+/**
+ * Silence runs in the take, found with two-threshold hysteresis so a single quiet frame
+ * inside speech does not open a spurious pause and a single loud frame inside a pause does
+ * not close one. Thresholds sit above the measured noise floor, not a fixed dBFS, so a
+ * quiet room and a loud one both work.
+ */
+export const detectSilences = (
+  samples: Float32Array,
+  sampleRate: number,
+  options: Partial<PauseOptions> = {},
+): Silence[] => {
+  const opt = { ...DEFAULT_PAUSE_OPTIONS, ...options }
+  const env = rmsEnvelopeDb(samples, sampleRate, opt.frameSec)
+  if (env.length === 0) return []
+
+  const floor = percentile(env, opt.floorPercentile)
+  // Guard against the floor landing on speech (a take that is nearly all talk, so its
+  // low percentile is still voice). Without enough spread to seat both thresholds below
+  // the speech level, thresholds would rise above it and mark speech as silence — the one
+  // dangerous failure. When that happens there is no confident silence to remove, so
+  // propose nothing rather than cut into words.
+  let maxDb = env[0]
+  for (let i = 1; i < env.length; i += 1) if (env[i] > maxDb) maxDb = env[i]
+  if (maxDb - floor < opt.speechMarginDb) return []
+
+  const silenceThresh = floor + opt.silenceMarginDb
+  const speechThresh = floor + Math.max(opt.speechMarginDb, opt.silenceMarginDb)
+  const frameSec = opt.frameSec
+  const totalSec = samples.length / sampleRate
+
+  const silences: Silence[] = []
+  let inSilence = env[0] < speechThresh
+  let runStartFrame = 0
+
+  for (let i = 1; i < env.length; i += 1) {
+    if (inSilence && env[i] >= speechThresh) {
+      silences.push({
+        startSec: runStartFrame * frameSec,
+        endSec: i * frameSec,
+        edge: runStartFrame === 0,
+      })
+      inSilence = false
+    } else if (!inSilence && env[i] < silenceThresh) {
+      inSilence = true
+      runStartFrame = i
+    }
+  }
+  if (inSilence) {
+    silences.push({ startSec: runStartFrame * frameSec, endSec: totalSec, edge: true })
+  }
+  return silences
+}
+
+/**
+ * Turn silences into removal regions. A head or tail silence is cut in full — a take
+ * should not open on three seconds of nothing. An interior pause longer than minPauseSec
+ * is shortened to targetGapSec by removing its tail, leaving a natural beat before the
+ * next line. Shorter pauses are the rhythm of speech and are left untouched.
+ */
+export const planCuts = (silences: Silence[], options: Partial<PauseOptions> = {}): Cut[] => {
+  const opt = { ...DEFAULT_PAUSE_OPTIONS, ...options }
+  const cuts: Cut[] = []
+  for (const s of silences) {
+    const length = s.endSec - s.startSec
+    if (s.edge) {
+      if (length > 0) cuts.push({ startSec: s.startSec, endSec: s.endSec })
+    } else if (length > opt.minPauseSec && length > opt.targetGapSec) {
+      cuts.push({ startSec: s.startSec + opt.targetGapSec, endSec: s.endSec })
+    }
+  }
+  return cuts
+}

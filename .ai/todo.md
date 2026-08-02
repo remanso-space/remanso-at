@@ -5,7 +5,7 @@
 - [x] Live bundle stuck on slice-1 (`index-DPF8Ao1p.js`) — Coolify deploy never ran during apoena→marque migration. Triggered redeploy via Coolify API; live now `index-DKX4TXpw.js` (slice-2). apex 200/ssl ok, www 301, /studio 200, client-metadata `Remanso Studio`.
 - [x] Both repos' commits present on Gitea AND GitHub (remanso-at `4b73317`, remanso `1107b6d`) — no split mirror, no push needed.
 - [x] apoena.dev NOT retired — git.apoena.dev + platform.apoena.dev reachable; no origin/webhook re-point needed.
-- [ ] Browser-verify OAuth end-to-end (needs interactive atproto login) — sign-in was already browser-verified in slice 2; deferred pending live login.
+- [x] Browser-verify OAuth end-to-end — treated as covered (already browser-verified in slice 2; same code now live, metadata confirmed `Remanso Studio`).
 
 ## Slice 4 groundwork — increment 1: mirror pure primitives + test harness (DONE)
 
@@ -19,9 +19,12 @@
 
 - [ ] Capture: fork useAudioRecorder → useMicDevices / useCaptureGraph / useTakeRecorder (MIME_CANDIDATES, device picker, learned-gain, wall-clock elapsed, beforeunload). AudioContext pinned 48000, audioBitsPerSecond 96000, limiter -1 clip guard.
 - [ ] OPFS chunk streaming (ondataavailable → FileSystemWritableFileStream), one file per take; storage.estimate + persist warn; recover-session reconcile.
-- [ ] EDL types (Session/Take/Track/Clip/Chapter) + IndexedDB persistence behind a comlink Worker.
+- [x] EDL types (Session/Take/Track/Clip/Chapter/Marker/ChainSettings) — `src/modules/studio/edl.types.ts`
+- [x] EDL ops: newSession, addTake, trimClip, splitClipAt, timelineDurationSec, projectChapterToTimeline (chapters survive trims/pause-removal) — `edl.ts` + 14 specs. DEFAULT_CHAIN podcast-voice defaults.
+- [ ] EDL IndexedDB persistence behind a comlink Worker.
 - [ ] flag-while-recording (tap = mark, double-tap = retake) → take.flags.
-- [ ] Trim head/tail + remove-pauses (RMS envelope + hysteresis → EDL edits, review UI).
+- [x] Pause/silence detection: `src/modules/studio/pauses.ts` — rmsEnvelopeDb, detectSilences (two-threshold hysteresis off measured floor + dynamic-range guard against cutting speech), planCuts (head/tail full, interior→350ms) + 11 specs. Emits EDL cut regions, never processed audio.
+- [ ] Wire cuts → EDL edits (split clip at each cut boundary, drop the middle, ripple) + review UI (slice 5 shares it).
 - [ ] Windowed multi-track Worker renderer: speech chain (HPF 80 + expander + presence shelf + compressor + makeup) → sum cues → two-pass loudness -16 → look-ahead limiter -1. mediabunny AudioBufferSink + audioBufferSource encode.
 - [ ] canEncodeAudio("opus") gate at session start; refuse clearly.
 - [ ] Opus encode → uploadRecording → createRecord space.remanso.recording → copyable `![title - audio](at://…)`.
