@@ -10,18 +10,24 @@ const close = () => {
 </script>
 
 <template>
-  <div v-if="offlineReady || needRefresh" role="alert" class="toast">
-    <p class="toast-label mono">{{ offlineReady ? "offline ready" : "new version" }}</p>
-    <p class="toast-body">
-      {{ offlineReady ? "Ready to work offline." : "A fresh build is available." }}
-    </p>
-    <div class="toast-actions">
-      <button v-if="needRefresh" class="toast-btn toast-btn-primary" @click="updateServiceWorker()">
-        Reload
-      </button>
-      <button class="toast-btn" @click="close">Close</button>
+  <Teleport to="body">
+    <div v-if="offlineReady || needRefresh" role="alert" class="toast">
+      <p class="toast-label mono">{{ offlineReady ? "offline ready" : "new version" }}</p>
+      <p class="toast-body">
+        {{ offlineReady ? "Ready to work offline." : "A fresh build is available." }}
+      </p>
+      <div class="toast-actions">
+        <button
+          v-if="needRefresh"
+          class="toast-btn toast-btn-primary"
+          @click="updateServiceWorker()"
+        >
+          Reload
+        </button>
+        <button class="toast-btn" @click="close">Close</button>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -29,7 +35,6 @@ const close = () => {
   position: fixed;
   right: 1.5rem;
   bottom: 1.5rem;
-  z-index: 50;
   width: 15rem;
   padding: 0.9rem 1rem;
   border: 1px solid var(--hw-rule);
