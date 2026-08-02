@@ -17,6 +17,12 @@ const routes: RouteRecordRaw[] = [
     name: "listen",
     component: () => import("./views/ListenView.vue"),
   },
+  // Unlisted scratch page for choosing the favicon. No nav entry on purpose.
+  {
+    path: "/favicon-lab",
+    name: "favicon-lab",
+    component: () => import("./views/FaviconLabView.vue"),
+  },
   { path: "/:catchAll(.*)", redirect: "/" },
 ]
 
