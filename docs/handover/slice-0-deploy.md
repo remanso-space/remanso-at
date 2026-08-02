@@ -169,10 +169,12 @@ Two things from it that bear on remanso.at:
 - **Response shape** is `{ recordings: [...], cursor? }` with `blobCid` + `mimeType` + `size` per row
   and **no ready-made blob URL** — the client resolves the PDS and builds the `getBlob` URL, so a
   cached response cannot go stale after a PDS migration.
-- **`space.remanso.recording` has no `discoverable` field**, so a note marked `discoverable: false`
-  would still have its audio in the public recordings feed. The plan ships the column defaulted to
-  listable and flags the decision rather than settling it. If the answer is "add the field", the
-  studio's publish path here has to write it.
+- **Every recording is discoverable, and that is intentional** (settled 2026-08-02). The lexicon has
+  no `discoverable` field and is not getting one, so the appview indexes and lists everything with no
+  visibility filter — unlike notes, where every listing query filters on it. Nothing for the studio's
+  publish path to write. A note marked `discoverable: false` does still have its audio listed, which
+  is coherent: the blob is already public to anyone with the CID, since `getBlob` needs no auth.
+  Hiding a recording means deleting the record.
 
 ## Still open
 
