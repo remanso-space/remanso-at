@@ -63,7 +63,7 @@ name = "Ambient room"
 start = 2026-08-17
 original = 2026-08-24
 status = "on-track"
-note = "Still ahead of the studio, so the pure-TS DSP engine is proven before the renderer needs it."
+note = "No auth, no storage, so it stays cheap and anonymous visitors can use it. Proves the pure-TS DSP engine before the renderer depends on it."
 
 [[feature]]
 name = "Studio — capture to link"
