@@ -62,8 +62,8 @@ learning = "Deploying an empty shell first surfaced three infra bugs before any 
 name = "The ode — landing page"
 start = 2026-08-03
 original = 2026-08-10
-status = "on-track"
-note = "House stack plus the --hw-* token layer lifted from WelcomeWorld.vue."
+delivered = 2026-08-03
+learning = "The landing is the --hw-* token layer's first real consumer: slice 0 shipped the layer but nothing exercised it, so building the ode surfaced six tokens still missing (pink-deep, two pink washes, surface, serif, mono). Routes /studio and /listen are sold on the page but not linked — they carry an 'in the works' tag instead, since no router is installed until sign-in needs one."
 
 [[feature]]
 name = "ATProto sign-in"

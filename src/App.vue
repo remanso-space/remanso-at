@@ -9,7 +9,7 @@ const year = new Date().getFullYear()
     <!-- ── Nav ─────────────────────────────────────────────── -->
     <nav class="nav">
       <a href="/" class="brand">
-        <img src="/pwa-192x192.png" alt="" class="brand-mark" width="28" height="28" />
+        <img src="/mark.png" alt="" class="brand-mark" width="28" height="28" />
         <span class="brand-word">Remanso Studio</span>
       </a>
       <div class="nav-right">
@@ -42,13 +42,7 @@ const year = new Date().getFullYear()
           </div>
           <div class="hero-right">
             <div class="pool">
-              <img
-                src="/pwa-512x512.png"
-                alt="Remanso"
-                class="pool-mark"
-                width="180"
-                height="180"
-              />
+              <img src="/mark.png" alt="Remanso" class="pool-mark" width="180" height="180" />
               <div class="ripple" />
               <div class="ripple r2" />
             </div>
@@ -172,7 +166,7 @@ const year = new Date().getFullYear()
     <footer class="footer">
       <div class="footer-inner">
         <div class="footer-brand">
-          <img src="/pwa-192x192.png" alt="" width="30" height="30" />
+          <img src="/mark.png" alt="" width="30" height="30" />
           <div>
             <div class="footer-title">Remanso Studio</div>
             <div class="footer-sub mono">record it, then let it settle</div>
