@@ -15,12 +15,13 @@ export default defineConfig({
       // it, so precaching it would be ~22x the size of the entire JS bundle.
       includeAssets: [
         "favicon.ico",
+        "favicon.svg",
         "apple-touch-icon.png",
         "apple-touch-icon-180x180.png",
         "pwa-64x64.png",
         "pwa-192x192.png",
         "pwa-512x512.png",
-        "masked-icon.png",
+        "masked-icon.svg",
         "maskable-icon-512x512.png",
         "monochromeicon.png",
       ],
