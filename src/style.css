@@ -48,6 +48,9 @@
    editorial accent its WelcomeWorld.vue uses for prose, drop caps and rules. */
 :root {
   --hw-pink: #e36598;
+  --hw-pink-deep: color-mix(in oklch, var(--hw-pink) 75%, var(--hw-ink));
+  --hw-pink-wash: color-mix(in oklch, var(--hw-pink) 12%, var(--hw-paper-warm));
+  --hw-pink-wash-2: color-mix(in oklch, var(--hw-pink) 22%, var(--hw-paper-warm));
   --hw-leaf: #6b8e4e;
   --hw-ink: #1f1b18;
   --hw-ink-soft: color-mix(in oklch, var(--hw-ink) 68%, var(--color-base-100));
@@ -55,6 +58,10 @@
   --hw-rule: color-mix(in oklch, var(--hw-ink) 14%, var(--color-base-100));
   --hw-paper: #fdfcfa;
   --hw-paper-warm: #f5f2ec;
+  /* Cards sit on white so they read as slightly elevated above the warm-white page. */
+  --hw-surface: #ffffff;
+  --hw-serif: "Libertinus Serif", "Iowan Old Style", Palatino, serif;
+  --hw-mono: "Courier Prime", "IBM Plex Mono", ui-monospace, monospace;
 
   /* Raw accent values fail contrast as text. remanso.space solves this with --link-accent:
      keep hue and chroma, re-pin lightness. ~5.8:1 instead of 1.17:1. */
