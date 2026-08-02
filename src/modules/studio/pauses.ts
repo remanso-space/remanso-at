@@ -146,3 +146,32 @@ export const planCuts = (silences: Silence[], options: Partial<PauseOptions> = {
   }
   return cuts
 }
+
+/** A kept span of the take, between cuts. */
+export interface KeptRegion {
+  inSec: number
+  outSec: number
+}
+
+/**
+ * The complement of the cuts over [0, durationSec] — the spans that survive. This is what
+ * the EDL keeps: one speech clip per region, placed contiguously so the removed audio
+ * ripples out. Overlapping or unsorted cuts are merged first.
+ */
+export const keptRegions = (durationSec: number, cuts: Cut[]): KeptRegion[] => {
+  const merged: Cut[] = []
+  for (const c of [...cuts].sort((a, b) => a.startSec - b.startSec)) {
+    const last = merged[merged.length - 1]
+    if (last && c.startSec <= last.endSec) last.endSec = Math.max(last.endSec, c.endSec)
+    else merged.push({ ...c })
+  }
+
+  const kept: KeptRegion[] = []
+  let cursor = 0
+  for (const c of merged) {
+    if (c.startSec > cursor) kept.push({ inSec: cursor, outSec: Math.min(c.startSec, durationSec) })
+    cursor = Math.max(cursor, c.endSec)
+  }
+  if (cursor < durationSec) kept.push({ inSec: cursor, outSec: durationSec })
+  return kept.filter((r) => r.outSec > r.inSec)
+}

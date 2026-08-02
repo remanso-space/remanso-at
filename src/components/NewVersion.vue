@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { useRegisterSW } from "virtual:pwa-register/vue"
 
+import { useRecordingState } from "../composables/useRecordingState"
+
 const { offlineReady, needRefresh, updateServiceWorker } = useRegisterSW()
+// An update dialog mid-recording is hostile — hold the toast until the take is done.
+const { isRecording } = useRecordingState()
 
 const close = () => {
   offlineReady.value = false
@@ -11,7 +15,7 @@ const close = () => {
 
 <template>
   <Teleport to="body">
-    <div v-if="offlineReady || needRefresh" role="alert" class="toast">
+    <div v-if="(offlineReady || needRefresh) && !isRecording" role="alert" class="toast">
       <p class="toast-label mono">{{ offlineReady ? "offline ready" : "new version" }}</p>
       <p class="toast-body">
         {{ offlineReady ? "Ready to work offline." : "A fresh build is available." }}

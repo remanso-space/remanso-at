@@ -32,9 +32,10 @@
 - [ ] Move render to a Worker (currently synchronous; fine for slice-4 lengths, revisit if it blocks UI).
 - [ ] canEncodeAudio("opus") gate at session start; refuse clearly.
 - [x] Publish deliverable (pure): `recordingMarkdownLink(atUri, title)` → `![<title> - audio](at://…)` + round-trip test. Write path `uploadRecording` already mirrored.
-- [ ] Opus encode (mediabunny/WebCodecs) + `canEncodeAudio("opus")` gate at session start (single point of failure — refuse clearly) → uploadRecording → link. [browser-coupled]
+- [x] Opus encode + `canEncodeAudio("opus")` gate (StudioView onMounted refuses clearly) → uploadRecording → link. Orchestrated in `studio/publishTake.ts` (decode→cuts→render→encode→upload→link). [built, runtime-pending]
 - [x] my-published-notes list (pure scan + mockable fetch): `src/modules/atproto/publishedNotes.ts` — listPublishedNotes (listRecords space.remanso.note, cursor), noteRecordingUris (mark notes with embedded `at://…/space.remanso.recording/`), recordingAltFor, recordingMarkdownLink. 12 specs.
-- [ ] StudioView UI: notes list → pick → record → trim/pauses review → render → publish → copy link. [browser-coupled]
+- [x] StudioView UI: canEncodeOpus gate → notes list (pick prefills title, ♪/— audio badge) → record (mic picker, live meter, flag/bad-take, elapsed) → review (remove-pauses toggle) → publish → copyable link. `useTakeRecorder.ts` (AudioContext@48k, 96 kbps, MIME pick, OPFS stream, beforeunload), `opfsTakes.ts` (chunk-stream store + quota check). [built, runtime-pending]
+- [x] Suppress NewVersion toast while recording — `useRecordingState.ts` shared flag, gated in NewVersion.vue.
 - [ ] iOS Safari acceptance gate.
 - [ ] Suppress NewVersion toast while recording.
 - [ ] Never putRecord a note.

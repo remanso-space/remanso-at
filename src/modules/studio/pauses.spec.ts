@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { detectSilences, planCuts, rmsEnvelopeDb, type Silence } from "./pauses"
+import { detectSilences, keptRegions, planCuts, rmsEnvelopeDb, type Silence } from "./pauses"
 
 const SR = 48_000
 
@@ -110,6 +110,34 @@ describe("planCuts", () => {
 
   it("drops a zero-length edge silence", () => {
     expect(planCuts([edge(5, 5)])).toEqual([])
+  })
+
+  it("keeps the spans between cuts (the complement)", () => {
+    expect(keptRegions(10, [{ startSec: 2, endSec: 4 }])).toEqual([
+      { inSec: 0, outSec: 2 },
+      { inSec: 4, outSec: 10 },
+    ])
+  })
+
+  it("drops a head cut so the first kept region starts after it", () => {
+    expect(keptRegions(10, [{ startSec: 0, endSec: 3 }])).toEqual([{ inSec: 3, outSec: 10 }])
+  })
+
+  it("merges overlapping cuts before taking the complement", () => {
+    expect(
+      keptRegions(10, [
+        { startSec: 6, endSec: 8 },
+        { startSec: 2, endSec: 5 },
+        { startSec: 4, endSec: 7 },
+      ]),
+    ).toEqual([
+      { inSec: 0, outSec: 2 },
+      { inSec: 8, outSec: 10 },
+    ])
+  })
+
+  it("returns the whole take when there are no cuts", () => {
+    expect(keptRegions(10, [])).toEqual([{ inSec: 0, outSec: 10 }])
   })
 
   it("processes a whole take: head cut, interior shortened, tail cut", () => {
