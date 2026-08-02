@@ -388,7 +388,7 @@ const copyLink = async () => {
                 </button>
                 <span
                   v-if="n.hasAudio"
-                  class="badge mono"
+                  class="audio-flag mono"
                   role="img"
                   aria-label="Already has audio"
                   title="Already has audio"
@@ -396,7 +396,7 @@ const copyLink = async () => {
                 >
                 <span
                   v-else
-                  class="badge badge-mute mono"
+                  class="audio-flag audio-flag-mute mono"
                   role="img"
                   aria-label="No audio yet"
                   title="No audio yet"
@@ -650,18 +650,21 @@ const copyLink = async () => {
   outline-offset: 2px;
   border-radius: 2px;
 }
-.badge {
+/* Named audio-flag, not badge: .badge is a DaisyUI component class, so the plain glyph
+   these spans want was being painted as a full pill (border, padding, background-color
+   from --color-base-100) on top of these two declarations. */
+.audio-flag {
   /* --hw-pink-deep is raw editorial pink: ~4.8:1 on a plain row but ~3.9:1 over the
      pink-wash of a picked row — under AA, and this glyph carries meaning. --link-accent
      re-pins the same hue to a fixed lightness (~7:1 on rows, ~5.8:1 on pink-wash). */
   color: var(--link-accent);
   font-size: 0.9rem;
 }
-/* The "no audio" dash must read in both the light theme and a browser-forced dark mode
-   (Dark Reader / Chrome auto-dark). Mid-greys like ink-soft/ink-faint invert to mid-greys
-   and collapse to ~2:1 on the inverted-dark row. Full ink is an extreme luminance, so it
-   inverts to a near-white that stays legible either way. */
-.badge-mute {
+/* The "no audio" dash must still read under a browser-forced dark mode (Dark Reader /
+   Chrome auto-dark). Mid-greys like ink-soft/ink-faint invert to mid-greys and collapse
+   to ~2:1 on the inverted-dark row. Full ink is an extreme luminance, so it inverts to a
+   near-white that stays legible either way. */
+.audio-flag-mute {
   color: var(--hw-ink);
 }
 .picked-line {

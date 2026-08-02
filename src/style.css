@@ -11,7 +11,15 @@
 @import "tailwindcss" source(none);
 @source "./**/*.{vue,ts}";
 @source "../index.html";
-@plugin "daisyui";
+/* Light theme only. The default plugin config also ships `dark --prefersdark`, which
+   repoints --color-base-100 & co. to a dark palette under OS dark mode. The --hw-* layer
+   below is a hardcoded light palette (paper #fdfcfa, ink #1f1b18) and html keeps a light
+   background, so a flipped base-100 produced dark-on-dark: DaisyUI-painted surfaces went
+   navy while the ink stayed dark, and --hw-ink-soft/faint/rule (which color-mix toward
+   base-100) darkened instead of lightening. This app has no dark design; opt out. */
+@plugin "daisyui" {
+  themes: light --default;
+}
 
 /* Overriding the built-in "light" theme rather than defining a new one, so the palette
    reaches both Tailwind utilities (bg-primary) and DaisyUI components (btn-primary).

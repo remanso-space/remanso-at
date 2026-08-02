@@ -3,21 +3,29 @@ import { computed, onMounted, ref, watch } from "vue"
 import { RouterLink, useRoute } from "vue-router"
 
 import { useSession } from "../composables/useSession"
+import { listAllRecordings } from "../modules/atproto/listAllRecordings"
 import { listRecordings, type ListenRecording } from "../modules/atproto/listRecordings"
 import { formatDuration } from "../utils/formatDuration"
 
-// The browser reads one repo at a time, straight from its PDS. `?handle=` or `?did=` picks
-// whose, and signed in with neither picks your own — the case that matters most, because a
-// cut published from the studio has nowhere else to show itself yet.
+// Two scopes. A single repo is read straight from its PDS: `?handle=` or `?did=` picks
+// whose, and signed in with neither picks your own. With no repo in focus — signed out with
+// no handle, or an explicit `?all=1` — the everyone feed comes from the appview, the only
+// place that has seen every author's recordings.
 const route = useRoute()
-const { did, handle, isReady, isLoggedIn } = useSession()
+const { did, handle, isLoggedIn } = useSession()
+
+const wantsEveryone = computed(() => route.query.all === "1")
 
 const requested = computed(() => {
   const fromQuery = route.query.handle ?? route.query.did
   const asked = Array.isArray(fromQuery) ? fromQuery[0] : fromQuery
-  return asked?.trim() || did.value || ""
+  const trimmed = asked?.trim()
+  if (trimmed) return trimmed
+  if (wantsEveryone.value) return ""
+  return did.value || ""
 })
 
+const mode = computed<"everyone" | "repo">(() => (requested.value ? "repo" : "everyone"))
 const isOwnRepo = computed(() => !!did.value && requested.value === did.value)
 
 const recordings = ref<ListenRecording[]>([])
@@ -27,27 +35,45 @@ const loadingMore = ref(false)
 const error = ref<string | null>(null)
 const shownHandle = ref<string | null>(null)
 
+// A monotonic token: a slower earlier load must never overwrite a newer scope's results,
+// and the everyone feed has no actor to compare, so a counter covers both scopes.
+let loadSeq = 0
+
+const detailOf = (result: { detail?: string }) => result.detail
+
 const errorFor = (reason: string, detail?: string) =>
   reason === "unresolved-actor"
     ? `Could not find a repo for "${requested.value}". Check the handle, or that its PDS is reachable.`
     : `Could not read the recordings (${reason}${detail ? `: ${detail}` : ""}).`
 
 const load = async () => {
-  const actor = requested.value
-  if (!actor) return
-
+  const seq = ++loadSeq
   loading.value = true
   error.value = null
-  const result = await listRecordings({ actor })
+
+  if (mode.value === "everyone") {
+    const result = await listAllRecordings()
+    if (seq !== loadSeq) return
+    loading.value = false
+    if (!result.ok) {
+      recordings.value = []
+      cursor.value = undefined
+      error.value = errorFor(result.reason, detailOf(result))
+      return
+    }
+    recordings.value = result.recordings
+    cursor.value = result.cursor
+    shownHandle.value = null
+    return
+  }
+
+  const result = await listRecordings({ actor: requested.value })
+  if (seq !== loadSeq) return
   loading.value = false
-
-  // A slower earlier request must not overwrite a newer actor's results.
-  if (actor !== requested.value) return
-
   if (!result.ok) {
     recordings.value = []
     cursor.value = undefined
-    error.value = errorFor(result.reason, result.detail)
+    error.value = errorFor(result.reason, detailOf(result))
     return
   }
   recordings.value = result.recordings
@@ -58,28 +84,30 @@ const load = async () => {
 const loadMore = async () => {
   if (!cursor.value || loadingMore.value) return
   loadingMore.value = true
-  const result = await listRecordings({ actor: requested.value, cursor: cursor.value })
+  const result =
+    mode.value === "everyone"
+      ? await listAllRecordings({ cursor: cursor.value })
+      : await listRecordings({ actor: requested.value, cursor: cursor.value })
   loadingMore.value = false
   if (!result.ok) {
-    error.value = errorFor(result.reason, result.detail)
+    error.value = errorFor(result.reason, detailOf(result))
     return
   }
   recordings.value = [...recordings.value, ...result.recordings]
   cursor.value = result.cursor
 }
 
-onMounted(() => {
-  if (requested.value) void load()
-})
+onMounted(() => void load())
 
-watch(requested, (actor) => {
+watch([requested, wantsEveryone], () => {
   recordings.value = []
   cursor.value = undefined
   shownHandle.value = null
-  if (actor) void load()
+  void load()
 })
 
 const whose = computed(() => {
+  if (mode.value === "everyone") return "everyone"
   if (isOwnRepo.value) return "yours"
   return shownHandle.value || requested.value
 })
@@ -101,24 +129,24 @@ const titleOf = (recording: ListenRecording) =>
   <section class="page">
     <div class="page-inner">
       <p class="hw-label eyebrow">§ — listen</p>
-      <h1 class="page-title">Recordings, straight from the PDS that holds them.</h1>
+      <h1 v-if="mode === 'everyone'" class="page-title">
+        Every recording, from every repo that publishes one.
+      </h1>
+      <h1 v-else class="page-title">Recordings, straight from the PDS that holds them.</h1>
 
-      <p class="page-lede">
+      <p v-if="mode === 'everyone'" class="page-lede">
+        Every <code class="mono">space.remanso.recording</code> the
+        <a href="https://api.remanso.space">appview</a> has indexed, newest first, read with no
+        account needed. Each plays from the author's own PDS. Add
+        <code class="mono">?handle=you.example.com</code> to read a single repo instead.
+      </p>
+      <p v-else class="page-lede">
         Every <code class="mono">space.remanso.recording</code> in one repo, newest first, read with
         no account needed. Each one keeps a link back to its note on
         <a href="https://remanso.space">remanso.space</a>, which stays home for the writing.
       </p>
 
-      <!-- No actor at all: signed out with no ?handle=. -->
-      <div v-if="!requested" class="page-note">
-        <p v-if="!isReady">Checking your session…</p>
-        <p v-else>
-          Sign in to hear your own recordings, or add a handle to the address —
-          <code class="mono">/listen?handle=you.example.com</code> — to read someone else's repo.
-        </p>
-      </div>
-
-      <template v-else>
+      <template>
         <p class="whose mono">
           {{ whose
           }}<span v-if="recordings.length">
@@ -130,10 +158,16 @@ const titleOf = (recording: ListenRecording) =>
           <p>{{ error }}</p>
         </div>
 
-        <p v-if="loading" class="status">Reading the repo…</p>
+        <p v-if="loading" class="status">
+          {{ mode === "everyone" ? "Loading recordings…" : "Reading the repo…" }}
+        </p>
 
         <div v-else-if="!recordings.length && !error" class="page-note">
-          <p v-if="isOwnRepo">
+          <p v-if="mode === 'everyone'">
+            No recordings indexed yet. Publish a cut from
+            <RouterLink to="/studio">the studio</RouterLink> and it shows up here.
+          </p>
+          <p v-else-if="isOwnRepo">
             Nothing in your recording collection yet. Publish a cut from
             <RouterLink to="/studio">the studio</RouterLink> and it shows up here.
           </p>
@@ -173,11 +207,14 @@ const titleOf = (recording: ListenRecording) =>
         </button>
       </template>
 
-      <p v-if="isLoggedIn && !isOwnRepo && requested" class="own-link">
-        <RouterLink :to="{ path: '/listen', query: { did } }">
-          Listen to your own recordings{{ handle ? ` (${handle})` : "" }}
+      <nav class="scope-links">
+        <RouterLink v-if="mode !== 'everyone'" :to="{ path: '/listen', query: { all: '1' } }">
+          Everyone's recordings
         </RouterLink>
-      </p>
+        <RouterLink v-if="isLoggedIn && !isOwnRepo" :to="{ path: '/listen', query: { did } }">
+          Your own recordings{{ handle ? ` (${handle})` : "" }}
+        </RouterLink>
+      </nav>
 
       <RouterLink to="/" class="page-back">← Back to the ode</RouterLink>
     </div>
@@ -358,13 +395,21 @@ const titleOf = (recording: ListenRecording) =>
   opacity: 0.6;
 }
 
-.own-link {
+.scope-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
   margin: 0 0 1.5rem;
   font-size: 0.95rem;
 }
 
-.own-link a {
+.scope-links a {
   color: var(--hw-pink-deep);
+  text-decoration: none;
+}
+
+.scope-links a:hover {
+  text-decoration: underline;
 }
 
 .page-back {
