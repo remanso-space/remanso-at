@@ -216,36 +216,48 @@ export const useTakeRecorder = () => {
     const rec = recorder.value
     if (!rec || !writer) return null
     const durationSec = (performance.now() - startedAt) / 1000
+    const opfsPath = writer.path
 
-    const stopped = new Promise<void>((resolve) => {
-      rec.onstop = () => resolve()
-    })
-    rec.stop()
-    await stopped
-    await writer.close()
+    // Everything past this point has to reach teardown. It is what clears the global
+    // recording flag, and that flag gates the update toast for the whole app — a stop that
+    // throws halfway (an already-inactive recorder rejects `stop()`) would otherwise wedge
+    // the flag true and silently suppress the toast for the rest of the session.
+    try {
+      if (rec.state !== "inactive") {
+        const stopped = new Promise<void>((resolve) => {
+          rec.onstop = () => resolve()
+        })
+        rec.stop()
+        await stopped
+      }
+      await writer.close()
+    } finally {
+      await teardown()
+    }
 
-    const take: Take = {
+    return {
       id: takeId,
-      opfsPath: writer.path,
+      opfsPath,
       durationSec,
       peaksPath: "",
       flags: flags.value,
       label: new Date().toISOString(),
     }
-    await teardown()
-    return take
   }
 
   const cancel = async () => {
     const rec = recorder.value
-    if (rec && rec.state !== "inactive") {
-      await new Promise<void>((resolve) => {
-        rec.onstop = () => resolve()
-        rec.stop()
-      })
+    try {
+      if (rec && rec.state !== "inactive") {
+        await new Promise<void>((resolve) => {
+          rec.onstop = () => resolve()
+          rec.stop()
+        })
+      }
+      if (writer) await writer.abort()
+    } finally {
+      await teardown()
     }
-    if (writer) await writer.abort()
-    await teardown()
   }
 
   const teardown = async () => {

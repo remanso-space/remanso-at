@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref } from "vue"
 import { useRegisterSW } from "virtual:pwa-register/vue"
 
 import { useRecordingState } from "../composables/useRecordingState"
@@ -15,7 +16,22 @@ const { offlineReady, needRefresh, updateServiceWorker } = useRegisterSW({
 // An update dialog mid-recording is hostile — hold the toast until the take is done.
 const { isRecording } = useRecordingState()
 
+// Left to itself this toast is unreachable: `offlineReady` fires once, on the first install
+// a browser ever does, and `needRefresh` only when a new build lands while the tab is open.
+// There is no way to ask for it, which makes it impossible to review or to demo. `?toast=`
+// renders either state on any route, without waiting on a service worker event. A preview
+// is deliberate, so it ignores the mid-recording hold.
+const preview = ref(new URLSearchParams(location.search).get("toast") ?? "")
+
+const showOfflineReady = computed(() => preview.value === "offline-ready" || offlineReady.value)
+const showNeedRefresh = computed(() => preview.value === "new-version" || needRefresh.value)
+const visible = computed(
+  () =>
+    (showOfflineReady.value || showNeedRefresh.value) && (!!preview.value || !isRecording.value),
+)
+
 const close = () => {
+  preview.value = ""
   offlineReady.value = false
   needRefresh.value = false
 }
@@ -23,14 +39,14 @@ const close = () => {
 
 <template>
   <Teleport to="body">
-    <div v-if="(offlineReady || needRefresh) && !isRecording" role="alert" class="toast">
-      <p class="toast-label mono">{{ offlineReady ? "offline ready" : "new version" }}</p>
+    <div v-if="visible" role="alert" class="toast">
+      <p class="toast-label mono">{{ showOfflineReady ? "offline ready" : "new version" }}</p>
       <p class="toast-body">
-        {{ offlineReady ? "Ready to work offline." : "A fresh build is available." }}
+        {{ showOfflineReady ? "Ready to work offline." : "A fresh build is available." }}
       </p>
       <div class="toast-actions">
         <button
-          v-if="needRefresh"
+          v-if="showNeedRefresh"
           class="toast-btn toast-btn-primary"
           @click="updateServiceWorker()"
         >
