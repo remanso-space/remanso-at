@@ -7,8 +7,6 @@ import { useSession } from "./composables/useSession"
 
 // First call wins: this resolves the OAuth callback and any ?handle= prefill.
 useSession(useRouter())
-
-const year = new Date().getFullYear()
 </script>
 
 <template>
@@ -48,8 +46,6 @@ const year = new Date().getFullYear()
         </div>
       </div>
       <div class="footer-fine mono">
-        <span>© {{ year }} Remanso</span>
-        <span>·</span>
         <span>made by <a href="https://apoena.dev">apoena.dev ↗</a></span>
       </div>
     </footer>

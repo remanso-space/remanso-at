@@ -25,10 +25,13 @@
 - [ ] flag-while-recording (tap = mark, double-tap = retake) → take.flags.
 - [x] Pause/silence detection: `src/modules/studio/pauses.ts` — rmsEnvelopeDb, detectSilences (two-threshold hysteresis off measured floor + dynamic-range guard against cutting speech), planCuts (head/tail full, interior→350ms) + 11 specs. Emits EDL cut regions, never processed audio.
 - [ ] Wire cuts → EDL edits (split clip at each cut boundary, drop the middle, ripple) + review UI (slice 5 shares it).
-- [ ] Windowed multi-track Worker renderer: speech chain (HPF 80 + expander + presence shelf + compressor + makeup) → sum cues → two-pass loudness -16 → look-ahead limiter -1. mediabunny AudioBufferSink + audioBufferSource encode.
+- [x] Render chain DSP (pure, seam-free): `src/modules/studio/renderChain.ts` — RBJ HPF + presence shelf (persistent biquad state), two-pass loudness normalize to -16, look-ahead limiter with hard -1 dBFS guarantee (sliding-window-max deque). `renderProgramme(pcm, sr, chain)`. 9 specs incl. windowed-equality + ceiling guarantee. (expander/compressor = later "podcast voice" increment)
+- [ ] Wire renderer to EDL+mediabunny: assemble speech PCM from clips (AudioBufferSink windows) → renderProgramme → mediabunny audioBufferSource encode. In a Worker.
 - [ ] canEncodeAudio("opus") gate at session start; refuse clearly.
-- [ ] Opus encode → uploadRecording → createRecord space.remanso.recording → copyable `![title - audio](at://…)`.
-- [ ] my-published-notes list: listRecords space.remanso.note, mark notes with `at://…/space.remanso.recording/` in content, prefill title/alt.
+- [x] Publish deliverable (pure): `recordingMarkdownLink(atUri, title)` → `![<title> - audio](at://…)` + round-trip test. Write path `uploadRecording` already mirrored.
+- [ ] Opus encode (mediabunny/WebCodecs) + `canEncodeAudio("opus")` gate at session start (single point of failure — refuse clearly) → uploadRecording → link. [browser-coupled]
+- [x] my-published-notes list (pure scan + mockable fetch): `src/modules/atproto/publishedNotes.ts` — listPublishedNotes (listRecords space.remanso.note, cursor), noteRecordingUris (mark notes with embedded `at://…/space.remanso.recording/`), recordingAltFor, recordingMarkdownLink. 12 specs.
+- [ ] StudioView UI: notes list → pick → record → trim/pauses review → render → publish → copy link. [browser-coupled]
 - [ ] iOS Safari acceptance gate.
 - [ ] Suppress NewVersion toast while recording.
 - [ ] Never putRecord a note.
