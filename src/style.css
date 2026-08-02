@@ -23,8 +23,11 @@
   --color-base-200: #f5f2ec;
   --color-base-300: #e8e3d9;
   --color-base-content: #1f1b18;
-  --color-primary: #e36598;
-  --color-primary-content: #ffffff;
+  /* remanso.space's chrome colour: the favicon stroke, mask-icon, theme_color and
+     manifest background all use #ffa4c0. Matching it keeps the installed PWA, the tab
+     icon and the in-app accents reading as one app across both domains. */
+  --color-primary: #ffa4c0;
+  --color-primary-content: #4a1526;
   --color-secondary: #6b8e4e;
   --color-secondary-content: #ffffff;
   --radius-box: 2px;
@@ -40,6 +43,9 @@
 /* Shared vocabulary with remanso.space, kept as its own token layer so the two apps can
    drift in markup while still reading as one thing. Mirrors the --hw-* block in that
    repo's WelcomeWorld.vue; changes here should be reflected there. */
+/* Two pinks on purpose, mirroring remanso.space: #ffa4c0 is the chrome/brand colour
+   (favicon, theme_color, DaisyUI primary above), while --hw-pink #e36598 is the darker
+   editorial accent its WelcomeWorld.vue uses for prose, drop caps and rules. */
 :root {
   --hw-pink: #e36598;
   --hw-leaf: #6b8e4e;

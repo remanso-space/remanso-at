@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import RippleMark from "./components/RippleMark.vue"
+import NewVersion from "./components/NewVersion.vue"
 
 const routes = [
   { path: "/listen", label: "read what is published" },
@@ -13,7 +13,7 @@ const routes = [
     <p class="hw-label">§ 00 — still filling</p>
 
     <h1 class="mt-6 flex items-center gap-4 text-5xl font-bold text-[var(--hw-ink)]">
-      <RippleMark class="size-11 shrink-0 text-primary" />
+      <img src="/pwa-192x192.png" alt="" class="size-12 shrink-0" />
       remanso.at
     </h1>
 
@@ -38,5 +38,7 @@ const routes = [
       Nothing here works yet. The plan is in the
       <a href="https://git.apoena.dev/remanso-space/remanso-at">README</a>.
     </p>
+
+    <NewVersion />
   </main>
 </template>
