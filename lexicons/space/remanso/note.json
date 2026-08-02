@@ -113,7 +113,7 @@
     },
     "image": {
       "type": "object",
-      "descriptions": "Images from the markdown content, separately uploaded and link in markdown content with blob CID.",
+      "description": "Images from the markdown content, separately uploaded and link in markdown content with blob CID.",
       "required": ["image"],
       "properties": {
         "image": {

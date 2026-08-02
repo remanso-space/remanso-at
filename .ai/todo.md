@@ -76,6 +76,15 @@ Handover: `docs/handover/slice-7-music-slots.md`.
 - [ ] **Live-verify (browser gate):** search, preview, pick, render with music under real speech,
       publish and read `credits` back off the PDS, OPFS quota with a fetched track, iOS Safari.
 
+## Lexicon resolution (DONE 2026-08-02)
+
+- [x] `_lexicon.remanso.space` TXT = `did=did:plc:4m3kouplb7s7xozjd3whinvl`, written as an
+      `at.marque.dns` entry on the `remanso.space` zone (marque NS serves it directly).
+- [x] Republished `com.atproto.lexicon.schema/space.remanso.recording` — the live copy predated
+      slice 7 and had neither `credits` nor the `#credit` def. `space.remanso.note` republished
+      after fixing the `descriptions` → `description` typo in the `#image` def.
+- [x] Verified the whole chain: NSID → authority → TXT → PLC → PDS → `getRecord`.
+
 ## Carried forward (slice 8+)
 
 - [x] Move the render to a Worker. `renderSessionInWorker` runs the pure `renderSession` in
