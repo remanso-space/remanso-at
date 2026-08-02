@@ -27,7 +27,7 @@ Four other treatments were built and compared at real 16/32px in a scratch page
   32px.
 
 Full concentric circles won. They match the landing animation literally, they match the
-name (a *remanso* is a still pool), and closed rings survive downscaling better than arcs,
+name (a _remanso_ is a still pool), and closed rings survive downscaling better than arcs,
 whose endpoints blur into nothing.
 
 ## How it is built
@@ -48,11 +48,11 @@ Run `pnpm icons` and commit the output. Nothing regenerates at build time.
 
 One geometry does not survive every size:
 
-| Size | Rings | Stroke | Flower |
-| --- | --- | --- | --- |
-| ≥ 96px | 2, at 0.55 / 0.28 opacity | 2.2 | watercolour (≥180px) or vector |
-| 24–95px | 2, at 0.8 / 0.45 opacity | 2.8 | vector, two-tone pinks, no midribs |
-| < 24px | 1, at r 26, full opacity | 4.5 | vector, grown into the space the single ring leaves |
+| Size    | Rings                     | Stroke | Flower                                              |
+| ------- | ------------------------- | ------ | --------------------------------------------------- |
+| ≥ 96px  | 2, at 0.55 / 0.28 opacity | 2.2    | watercolour (≥180px) or vector                      |
+| 24–95px | 2, at 0.8 / 0.45 opacity  | 2.8    | vector, two-tone pinks, no midribs                  |
+| < 24px  | 1, at r 26, full opacity  | 4.5    | vector, grown into the space the single ring leaves |
 
 Two pale rings at 16px antialias into grey fuzz and the icon stops being pink. A 3-unit
 stroke is 0.75px at 16px — it lands across two pixel rows at half strength, so the small
@@ -60,7 +60,7 @@ tier uses 4.5 to sit on a whole pixel. The four-step pink ramp collapses into on
 below 48px, so the small tier drops to two tones and deletes the leaf midribs.
 
 **`sharpsToIco` must not be given a `sizes` option.** It resizes one render to every size
-— picking the next render *larger* than the target — which silently threw away all of the
+— picking the next render _larger_ than the target — which silently threw away all of the
 above and shipped three scalings of the 16px drawing. Pass the three sharps and let each
 one land at its native size.
 
