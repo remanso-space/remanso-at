@@ -229,7 +229,7 @@ const copyLink = async () => {
       </div>
 
       <template v-else>
-        <p v-if="gate === 'checking'" class="status">Checking audio support…</p>
+        <p v-if="gate === 'checking'" class="status-line">Checking audio support…</p>
 
         <div v-else-if="gate === 'unsupported'" class="page-note danger">
           <p>
@@ -370,7 +370,7 @@ const copyLink = async () => {
           <!-- Your published notes: pick one to record against -->
           <div class="notes">
             <p class="hw-label">§ — your notes</p>
-            <p v-if="loadingNotes" class="status">Loading…</p>
+            <p v-if="loadingNotes" class="status-line">Loading…</p>
             <p v-else-if="notesError" class="error">{{ notesError }}</p>
             <ul v-else-if="notes.length" class="note-list">
               <li
@@ -404,7 +404,7 @@ const copyLink = async () => {
                 >
               </li>
             </ul>
-            <p v-else class="status">No published notes found on your PDS.</p>
+            <p v-else class="status-line">No published notes found on your PDS.</p>
             <p v-if="pickedTitle" class="picked-line mono" role="status">
               Title set to “{{ pickedTitle }}”.
             </p>
@@ -459,7 +459,7 @@ const copyLink = async () => {
 .page-note.danger {
   border-color: #c0392b;
 }
-.status {
+.status-line {
   color: var(--hw-ink-faint);
 }
 .signed-in {
@@ -650,9 +650,13 @@ const copyLink = async () => {
   outline-offset: 2px;
   border-radius: 2px;
 }
-/* Named audio-flag, not badge: .badge is a DaisyUI component class, so the plain glyph
-   these spans want was being painted as a full pill (border, padding, background-color
-   from --color-base-100) on top of these two declarations. */
+/* Deliberately not named after DaisyUI's pill component. That name is a live component
+   class, so these spans were painted as a full pill — border, padding, and a
+   background-color off --color-base-100 — on top of the two declarations below. Under the
+   dark theme that base flipped to navy while the glyph kept its hardcoded dark ink, and
+   the dash vanished. The name is spelled out nowhere here on purpose: Tailwind scans this
+   file as raw text, so writing it even inside a comment re-emits the dead component rule
+   (the same doc-scanning trap that src/style.css uses `source(none)` to avoid). */
 .audio-flag {
   /* --hw-pink-deep is raw editorial pink: ~4.8:1 on a plain row but ~3.9:1 over the
      pink-wash of a picked row — under AA, and this glyph carries meaning. --link-accent

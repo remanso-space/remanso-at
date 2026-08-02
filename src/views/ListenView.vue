@@ -158,7 +158,7 @@ const titleOf = (recording: ListenRecording) =>
           <p>{{ error }}</p>
         </div>
 
-        <p v-if="loading" class="status">
+        <p v-if="loading" class="status-line">
           {{ mode === "everyone" ? "Loading recordings…" : "Reading the repo…" }}
         </p>
 
@@ -293,7 +293,7 @@ const titleOf = (recording: ListenRecording) =>
   margin: 0 0 1rem;
 }
 
-.status {
+.status-line {
   color: var(--hw-ink-faint);
   margin: 0 0 2rem;
 }
