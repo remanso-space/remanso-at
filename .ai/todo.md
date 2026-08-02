@@ -34,6 +34,16 @@
 - [x] Gates: build clean (zero warnings, font `@import` line 1), lint, fmt:check, 186 tests.
 - [x] README macroplan: Derush delivered + learning. `docs/handover/slice-5-derush.md`.
 
+## After slice 5 (DONE, still runtime-pending)
+
+- [x] `d8afd4d` picked-note feedback, hourly service-worker update poll, PWA dev options.
+- [x] `414b17f` wedged `isRecording` flag no longer hides the update toast; specs for
+      `NewVersion` and `useTakeRecorder`; `src/test/pwaRegisterStub.ts`.
+- [x] `6e965ba` dropped the `z-index: 1` floor on `.nav` / `main` / `.footer` in `App.vue` —
+      that was why the body-teleported toast was invisible.
+- [x] Gates at `3673269`: build clean, lint, fmt:check, **194 tests**. Live bundle
+      `index-BletfXiY.js` matches the local build — deployed and verified.
+
 ## Carried forward (slice 6+)
 
 - [ ] Chapter markers — `projectChapterToTimeline` works, nothing drops a marker yet.

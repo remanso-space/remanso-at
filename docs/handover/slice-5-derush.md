@@ -120,6 +120,22 @@ proving the keys reach the right pure function and stay out of the way while you
 - **Best-of-N is per take, not per clip.** `setClipMuted` is there and tested; the UI mutes
   and solos whole takes, which is what "another take of that line" actually means today.
 
+## After this handover was written
+
+Three fixes landed on top of the slice, all still without a browser to check them in:
+
+- `d8afd4d` — picked notes show they were picked; the service worker registration is polled
+  hourly so a long-lived tab still sees the update toast; PWA dev options on.
+- `414b17f` — a wedged `isRecording` flag could hide the update toast forever; the recorder
+  now clears it on every exit path, with specs for `NewVersion` and `useTakeRecorder`
+  (`src/test/pwaRegisterStub.ts` stubs `virtual:pwa-register/vue` for vitest).
+- `6e965ba` — the real reason the toast was invisible: `App.vue` put `z-index: 1` on `.nav`,
+  `main` and `.footer`, so a body-teleported overlay painted underneath all three. Removing
+  that floor let the toast drop its `z-index: 100`. **Any new fixed overlay in this app needs
+  an explicit z-index above 1** — see `.ai/lessons.md`.
+
+The test count is **194** as of `3673269`, not the 186 quoted above.
+
 ## Where slice 6 starts — the cue track
 
 The snap targets slice 6 needs already exist and are already drawn: flags, speech onsets,
