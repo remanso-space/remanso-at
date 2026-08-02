@@ -294,7 +294,12 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
               placeholder="Search openly licensed audio"
               @keyup.enter="runSearch(query)"
             />
-            <button class="btn" :disabled="searching" @click="runSearch(query)">
+            <button
+              class="search-btn"
+              :disabled="searching"
+              :aria-label="searching ? 'Searching' : 'Search'"
+              @click="runSearch(query)"
+            >
               {{ searching ? "Searching…" : "Search" }}
             </button>
           </div>
@@ -468,10 +473,47 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
   color: var(--hw-pink-deep);
   border-color: var(--hw-pink);
 }
+/* Input and its Search action are one control: the button rides in the input's suffix,
+   sharing a border that lights up together on focus. */
 .search {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  align-items: stretch;
+  border: 1px solid var(--hw-rule);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--hw-surface);
+}
+.search:focus-within {
+  border-color: var(--hw-pink);
+}
+.search .text {
+  flex: 1;
+  min-width: 10rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+.search .text:focus {
+  outline: none;
+}
+.search-btn {
+  border: none;
+  border-left: 1px solid var(--hw-rule);
+  background: transparent;
+  padding: 0 0.9rem;
+  font-family: var(--hw-mono);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  color: var(--hw-pink-deep);
+  cursor: pointer;
+}
+.search-btn:hover:not(:disabled) {
+  background: var(--hw-pink);
+  color: var(--hw-surface);
+}
+.search-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .results {
   list-style: none;

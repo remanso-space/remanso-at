@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 
 import MusicSlotPanel from "../components/studio/MusicSlotPanel.vue"
 import DerushPanel from "../components/studio/DerushPanel.vue"
@@ -14,6 +14,7 @@ import {
 import { toShortDid } from "../modules/atproto/shortDid"
 import type { TakePcm } from "../modules/studio/assemble"
 import { analyzeTakeFile, type TakeAnalysis } from "../modules/studio/analyzeTake"
+import { removeTake as removeTakeFromEdl } from "../modules/studio/derush"
 import { addTake, newSession } from "../modules/studio/edl"
 import { programmeDurationSec } from "../modules/studio/musicSlots"
 import type { Session } from "../modules/studio/edl.types"
@@ -24,6 +25,7 @@ import { deletePeaks, writePeaks } from "../modules/studio/opfsPeaks"
 import { deleteTake, readTakeFile } from "../modules/studio/opfsTakes"
 import { publishSession } from "../modules/studio/publishSession"
 import { renderToPcm, type RenderProgress } from "../modules/studio/renderToPcm"
+import { encodeWav } from "../modules/studio/wav"
 import { formatDuration } from "../utils/formatDuration"
 
 const { isLoggedIn, handle, did } = useSession()
@@ -71,31 +73,36 @@ const copied = ref(false)
 const progress = ref<RenderProgress | null>(null)
 
 // The final-cut preview: render exactly what publish would — pauses removed, intro and
-// breaks assembled, chain applied — and play the samples straight back through WebAudio so
-// the author hears the deliverable before committing it. No encode, no upload.
-type PreviewState = "idle" | "rendering" | "playing"
+// breaks assembled, chain applied — wrap it as a WAV blob and hand it to an <audio> element.
+// The element is what makes the cut walkable: native play, pause, scrub and seek, so the
+// author can jump straight to the break they are unsure about instead of sitting through it.
+type PreviewState = "idle" | "rendering" | "ready"
 const previewState = ref<PreviewState>("idle")
 const previewError = ref<string | null>(null)
-let previewCtx: AudioContext | null = null
-let previewSource: AudioBufferSourceNode | null = null
+const previewAudio = ref<HTMLAudioElement | null>(null)
+const previewUrl = ref<string | null>(null)
+const previewPlaying = ref(false)
+const previewPosSec = ref(0)
+const previewDurSec = ref(0)
 
+const revokePreviewUrl = () => {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = null
+}
+
+/** Tear the preview down: stop the element, free the blob, and forget the transport. */
 const stopPreview = () => {
-  if (previewSource) {
-    previewSource.onended = null
-    try {
-      previewSource.stop()
-    } catch {
-      // Already stopped or never started — nothing to do.
-    }
-    previewSource = null
-  }
-  void previewCtx?.close()
-  previewCtx = null
-  if (previewState.value === "playing") previewState.value = "idle"
+  previewAudio.value?.pause()
+  revokePreviewUrl()
+  previewPlaying.value = false
+  previewPosSec.value = 0
+  previewDurSec.value = 0
+  if (previewState.value !== "rendering") previewState.value = "idle"
 }
 
 const previewFinal = async () => {
-  if (previewState.value === "playing" || previewState.value === "rendering") {
+  // A second click while a preview is loaded closes it; while it is still rendering, cancels.
+  if (previewState.value !== "idle") {
     stopPreview()
     previewState.value = "idle"
     return
@@ -114,24 +121,33 @@ const previewFinal = async () => {
       previewState.value = "idle"
       return
     }
-    const { samples } = result.render
-    const ctx = new AudioContext()
-    const buffer = ctx.createBuffer(1, samples.length, SESSION_SAMPLE_RATE)
-    buffer.getChannelData(0).set(samples)
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.connect(ctx.destination)
-    source.onended = () => stopPreview()
-    previewCtx = ctx
-    previewSource = source
-    previewState.value = "playing"
-    source.start()
+    revokePreviewUrl()
+    previewUrl.value = URL.createObjectURL(encodeWav(result.render.samples, SESSION_SAMPLE_RATE))
+    previewDurSec.value = result.render.durationSec
+    previewState.value = "ready"
+    // Wait for the new src to bind before asking the element to play it.
+    await nextTick()
+    void previewAudio.value?.play().catch(() => (previewPlaying.value = false))
   } catch (err) {
     previewError.value = err instanceof Error ? err.message : "The preview could not be rendered."
     previewState.value = "idle"
   } finally {
     progress.value = null
   }
+}
+
+const togglePreviewPlay = () => {
+  const el = previewAudio.value
+  if (!el) return
+  if (el.paused) void el.play().catch(() => (previewPlaying.value = false))
+  else el.pause()
+}
+
+const seekPreview = (value: string) => {
+  const el = previewAudio.value
+  if (!el) return
+  el.currentTime = Number(value)
+  previewPosSec.value = el.currentTime
 }
 
 onBeforeUnmount(stopPreview)
@@ -217,6 +233,29 @@ const stopRecording = async () => {
   const peaksPath = await writePeaks(take.id, analysis.peaks).catch(() => "")
   recordTake(addTake(session.value, { ...take, durationSec, peaksPath }, `${take.id}:0`))
   selectedTakeId.value = take.id
+}
+
+/**
+ * Delete one take for good: confirm, drop it from the EDL, then free its bytes, peaks,
+ * samples and analysis. Destructive and unrecoverable, so it lands on a fresh history
+ * baseline — undo must never resurrect a take whose file is already gone.
+ */
+const deleteTakeById = async (takeId: string) => {
+  const take = session.value.takes.find((t) => t.id === takeId)
+  if (!take) return
+  if (!window.confirm("Delete this take? Its recording is removed for good.")) return
+
+  stopPreview()
+  const next = removeTakeFromEdl(session.value, takeId)
+  history.value = historyOf(next)
+
+  await deleteTake(take.opfsPath)
+  await deletePeaks(take.peaksPath)
+  delete takePcm[takeId]
+  const { [takeId]: _removed, ...rest } = analyses.value
+  analyses.value = rest
+
+  if (selectedTakeId.value === takeId) selectedTakeId.value = next.takes[0]?.id ?? ""
 }
 
 /** Free every take's bytes and start from an empty EDL. */
@@ -397,6 +436,7 @@ const copyLink = async () => {
             :can-undo="canUndo"
             @edit="edit"
             @undo="history = undo(history)"
+            @delete-take="deleteTakeById"
           />
 
           <!-- Music: named slots filled from an open-licence library -->
@@ -413,15 +453,17 @@ const copyLink = async () => {
               <div class="review-actions">
                 <button
                   class="btn"
-                  :disabled="publishState === 'publishing' || !hasProgramme"
+                  :disabled="
+                    publishState === 'publishing' || previewState === 'rendering' || !hasProgramme
+                  "
                   @click="previewFinal"
                 >
-                  {{ previewState === "playing" ? "❚❚ Stop preview" : "▶ Preview final" }}
+                  {{ previewState === "ready" ? "✕ Close preview" : "▶ Preview final" }}
                 </button>
                 <button
                   class="btn primary"
                   :disabled="
-                    publishState === 'publishing' || previewState !== 'idle' || !hasProgramme
+                    publishState === 'publishing' || previewState === 'rendering' || !hasProgramme
                   "
                   @click="publish"
                 >
@@ -433,9 +475,48 @@ const copyLink = async () => {
               </div>
 
               <p class="preview-hint mono">
-                Preview plays the final cut — pauses removed, intro and breaks under it — before you
-                publish.
+                Preview is the final cut — pauses removed, intro and breaks under it. Play it, or
+                drag the bar to jump anywhere in it, before you publish.
               </p>
+
+              <!-- The final cut as a walkable player: a WAV blob behind a plain media element,
+                   so play/pause and the scrub bar are the browser's own. -->
+              <div v-if="previewState === 'ready'" class="preview-player">
+                <audio
+                  ref="previewAudio"
+                  :src="previewUrl ?? undefined"
+                  class="offstage"
+                  preload="auto"
+                  @play="previewPlaying = true"
+                  @pause="previewPlaying = false"
+                  @ended="previewPlaying = false"
+                  @timeupdate="previewPosSec = previewAudio?.currentTime ?? 0"
+                  @loadedmetadata="
+                    previewDurSec = Number.isFinite(previewAudio?.duration)
+                      ? (previewAudio?.duration ?? previewDurSec)
+                      : previewDurSec
+                  "
+                />
+                <button
+                  class="btn"
+                  :title="previewPlaying ? 'Pause' : 'Play'"
+                  @click="togglePreviewPlay"
+                >
+                  {{ previewPlaying ? "❚❚" : "▶" }}
+                </button>
+                <span class="clock mono">{{ formatDuration(previewPosSec) ?? "0:00" }}</span>
+                <input
+                  class="preview-seek"
+                  type="range"
+                  min="0"
+                  :max="previewDurSec || 0"
+                  step="0.01"
+                  :value="previewPosSec"
+                  aria-label="Seek in the preview"
+                  @input="seekPreview(($event.target as HTMLInputElement).value)"
+                />
+                <span class="clock mono">{{ formatDuration(previewDurSec) ?? "0:00" }}</span>
+              </div>
 
               <!-- One bar for both render paths, with the live stage under it. -->
               <div
@@ -732,6 +813,33 @@ const copyLink = async () => {
   font-size: 0.78rem;
   color: var(--hw-ink-faint);
   margin: 0.6rem 0 0;
+}
+.preview-player {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.8rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--hw-rule);
+  border-radius: 6px;
+  background: var(--hw-pink-wash);
+}
+.clock {
+  min-width: 3.2rem;
+  font-size: 0.85rem;
+  color: var(--hw-ink-soft);
+}
+.preview-seek {
+  flex: 1;
+  min-width: 8rem;
+  accent-color: var(--hw-pink);
+  cursor: pointer;
+}
+.offstage {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
 }
 .progress {
   margin: 0.9rem 0 0;

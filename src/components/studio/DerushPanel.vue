@@ -45,6 +45,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   edit: [session: Session]
   undo: []
+  "delete-take": [takeId: string]
   "update:selectedTakeId": [takeId: string]
 }>()
 
@@ -116,6 +117,13 @@ const applyRate = () => {
   const gen = (transportGen += 1)
   if (rate.value > 0) {
     el.playbackRate = rate.value
+    // Start from the cursor, not from wherever the element happens to sit. A waveform click
+    // sets `playheadSec` and the element's currentTime together, but a currentTime set issued
+    // before the element is seekable is silently dropped — so without this, play would begin
+    // at 0. Only re-pin when starting from a stop: mid-playback the two already track (the
+    // frame loop syncs them), and re-seeking there would stutter on a shuttle-rate change.
+    if (el.paused && Math.abs(el.currentTime - playheadSec.value) > 0.01)
+      el.currentTime = playheadSec.value
     // Wrapped rather than chained: a media element that refuses to play may return
     // nothing at all instead of a rejected promise. Only a still-current, still-forward
     // play that genuinely failed drops the transport to paused.
@@ -352,6 +360,13 @@ const lufsLabel = (takeId: string): string => {
           @click="solo(t)"
         >
           Solo
+        </button>
+        <button
+          class="btn tiny danger"
+          title="Delete this take for good"
+          @click="emit('delete-take', t.id)"
+        >
+          Delete
         </button>
       </li>
     </ul>

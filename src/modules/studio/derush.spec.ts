@@ -11,6 +11,7 @@ import {
   nextShuttleRate,
   rejectTakeRange,
   relayoutSpeech,
+  removeTake,
   retakeRange,
   retakeRanges,
   setClipMuted,
@@ -200,6 +201,40 @@ describe("muting and best-of-N", () => {
     const after = setTakeMuted(perClip, "t1", true)
 
     expect(isTakeMuted(after, "t2")).toBe(true)
+  })
+})
+
+describe("removeTake", () => {
+  const twoTakes = () => addTake(oneTake(), take("t2", 6), "c2")
+
+  it("drops the take, its clips, and closes the timeline gap", () => {
+    const after = removeTake(twoTakes(), "t1")
+
+    expect(after.takes.map((t) => t.id)).toEqual(["t2"])
+    expect(clips(after)).toHaveLength(1)
+    expect(clips(after)[0].source).toEqual({ kind: "take", takeId: "t2" })
+    // t2 ripples back to the start now that t1 is gone.
+    expect(placements(after)).toEqual([0])
+    expect(speechDurationSec(after)).toBe(6)
+  })
+
+  it("removes chapters dropped against the deleted take, keeping the others", () => {
+    const withChapters = {
+      ...twoTakes(),
+      chapters: [
+        { takeId: "t1", atTakeSec: 2 },
+        { takeId: "t2", atTakeSec: 1 },
+      ],
+    }
+    const after = removeTake(withChapters, "t1")
+    expect(after.chapters).toEqual([{ takeId: "t2", atTakeSec: 1 }])
+  })
+
+  it("deleting the last take leaves an empty, playable EDL", () => {
+    const after = removeTake(oneTake(), "t1")
+    expect(after.takes).toHaveLength(0)
+    expect(clips(after)).toHaveLength(0)
+    expect(speechDurationSec(after)).toBe(0)
   })
 })
 

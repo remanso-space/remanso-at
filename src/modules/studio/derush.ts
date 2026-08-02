@@ -168,6 +168,22 @@ export const soloTake = (session: Session, takeId: string): Session =>
     ),
   )
 
+/**
+ * Delete a take outright: drop the take, every speech clip cut from it, and every chapter
+ * dropped against it, then re-lay the timeline so the remaining takes close the gap. Unlike
+ * a mute — which parks a take in place for best-of-N and is reversible — this is the
+ * destructive one: the caller also frees the take's bytes and analysis, so it belongs on a
+ * fresh history baseline rather than the undo stack.
+ */
+export const removeTake = (session: Session, takeId: string): Session => {
+  const clips = speechTrack(session).clips.filter(
+    (c) => !(c.source.kind === "take" && c.source.takeId === takeId),
+  )
+  const chapters = session.chapters.filter((c) => c.takeId !== takeId)
+  const takes = session.takes.filter((t) => t.id !== takeId)
+  return relayoutSpeech(withSpeechClips({ ...session, chapters, takes }, clips))
+}
+
 export const isTakeMuted = (session: Session, takeId: string): boolean => {
   const clips = clipsOfTake(session, takeId)
   return clips.length > 0 && clips.every((c) => c.muted === true)
