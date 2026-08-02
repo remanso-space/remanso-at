@@ -175,6 +175,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => observer?.disconnect())
 
+// Shallow on purpose. The playhead moves every frame, and a deep watcher would walk the
+// take's peaks — tens of thousands of entries — sixty times a second to discover that
+// nothing in them changed. Every other input is replaced wholesale when it changes, so
+// identity is enough.
+watch(() => props.playheadSec, draw)
 watch(
   () => [
     props.peaks,
@@ -183,12 +188,10 @@ watch(
     props.flags,
     props.cuts,
     props.onsets,
-    props.playheadSec,
     props.inSec,
     props.outSec,
   ],
   draw,
-  { deep: true },
 )
 </script>
 

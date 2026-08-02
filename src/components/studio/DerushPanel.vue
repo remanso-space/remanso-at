@@ -152,6 +152,18 @@ const clearRegion = () => {
   outSec.value = null
 }
 
+// Setting one end past the other drops the other rather than swapping: you meant the mark
+// you just placed, and a silently reversed region is how you reject the wrong four seconds.
+const setIn = () => {
+  inSec.value = playheadSec.value
+  if (outSec.value !== null && outSec.value <= inSec.value) outSec.value = null
+}
+
+const setOut = () => {
+  outSec.value = playheadSec.value
+  if (inSec.value !== null && inSec.value >= outSec.value) inSec.value = null
+}
+
 const rejectRegion = () => {
   const take = selectedTake.value
   if (!take || !hasRegion.value) return
@@ -228,12 +240,10 @@ const onKeydown = (event: KeyboardEvent) => {
       shuttle(1)
       break
     case "i":
-      inSec.value = playheadSec.value
-      if (outSec.value !== null && outSec.value <= inSec.value) outSec.value = null
+      setIn()
       break
     case "o":
-      outSec.value = playheadSec.value
-      if (inSec.value !== null && inSec.value >= outSec.value) inSec.value = null
+      setOut()
       break
     case "x":
       rejectRegion()
@@ -341,12 +351,8 @@ const lufsLabel = (takeId: string): string => {
       </div>
 
       <div class="region">
-        <button class="btn" title="I — set in at the playhead" @click="inSec = playheadSec">
-          Set in (I)
-        </button>
-        <button class="btn" title="O — set out at the playhead" @click="outSec = playheadSec">
-          Set out (O)
-        </button>
+        <button class="btn" title="I — set in at the playhead" @click="setIn">Set in (I)</button>
+        <button class="btn" title="O — set out at the playhead" @click="setOut">Set out (O)</button>
         <span class="region-label mono">
           <template v-if="hasRegion">
             {{ formatDuration(inSec!) }} → {{ formatDuration(outSec!) }}
