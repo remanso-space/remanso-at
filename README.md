@@ -1,6 +1,6 @@
 # remanso-at
 
-An ode to expression and to what you keep in your PDS.
+**Remanso Studio** — an ode to expression and to what you keep in your PDS.
 
 Deployed at https://remanso.at
 
@@ -47,7 +47,7 @@ waveform needs the whole buffer anyway.
 ## Plan
 
 ```macroplan
-title = "remanso.at"
+title = "Remanso Studio"
 start = 2026-08-03
 end = 2026-11-09
 

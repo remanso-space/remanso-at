@@ -30,13 +30,21 @@ Versions installed: vite 8.2.0, vue 3.5.40, tailwindcss 4.3.3 (`@tailwindcss/vit
 file), daisyui 5.7.9, typescript ~6.0.2, vue-tsc 3.3.8, vite-plugin-pwa 1.3.0, oxlint 1.76,
 oxfmt 0.61, pnpm 11.17.0 (pinned via `packageManager`).
 
-### Identity is shared with remanso.space, deliberately
+### The app is called Remanso Studio
 
-One brand, one mark, one colour. The icon set is **copied verbatim** rather than regenerated, and
-`favicon.ico`, `masked-icon.png` and `pwa-512x512.png` were confirmed byte-identical to what
-remanso.space serves. `manifest.webmanifest` matches on `name`, `short_name`, `theme_color`
-(`#ffa4c0`), `background_color` and all five icons. `#ffa4c0` is also the `mask-icon` colour,
-`theme-color`, and DaisyUI's `--color-primary`.
+Same mark and colour as remanso.space, different name. The icon set is **copied verbatim** rather
+than regenerated — `favicon.ico`, `masked-icon.png` and `pwa-512x512.png` were confirmed
+byte-identical to what remanso.space serves — and `theme_color`/`background_color`/`mask-icon` and
+DaisyUI's `--color-primary` are all `#ffa4c0`.
+
+The manifest is `name: "Remanso Studio"`, `short_name: "Studio"`. `short_name` is what a launcher
+labels the icon with and "Remanso Studio" truncates there, so the two installed apps read as
+"Remanso" and "Studio" under the identical mark. Change `short_name` if you would rather both say
+Remanso and accept the ellipsis.
+
+This also settles a concern raised while wiring OAuth: `client_name` in `client-metadata.json` is
+`"Remanso Studio"`, and it now matches the app name. That string is what a PDS consent screen and
+the user's revocation list display, so the two clients are distinguishable there.
 
 **Two pinks, on purpose, mirroring remanso.space:** `#ffa4c0` is the chrome colour, while
 `--hw-pink` `#e36598` stays the darker editorial accent its `WelcomeWorld.vue` uses for prose and
@@ -48,11 +56,6 @@ To change any icon, change it in remanso.space and copy the files across —
 `registerType: "prompt"` needs UI to actually apply updates, so `src/components/NewVersion.vue`
 renders the toast. **When the studio lands, suppress that toast while a take is recording** — an
 update dialog mid-recording is hostile.
-
-`client_name` in `client-metadata.json` is still `"Remanso Studio"`, not `"Remanso"`. That string is
-what a PDS consent screen and the user's revocation list display, and it is the one place where
-identical naming has a real cost: two clients both called "Remanso" cannot be told apart when
-revoking one. Say the word if you want it unified anyway.
 
 `origin` has one fetch URL (Gitea) and two push URLs, so a single `git push` writes both remotes.
 

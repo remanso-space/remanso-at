@@ -24,11 +24,13 @@ export default defineConfig({
         "maskable-icon-512x512.png",
         "monochromeicon.png",
       ],
-      // Same identity as remanso.space: one brand, one mark, one colour.
+      // Same mark and colour as remanso.space, different name. short_name is what a
+      // launcher labels the icon with, and "Remanso Studio" truncates there, so the two
+      // installed apps read as "Remanso" and "Studio" under the identical mark.
       manifest: {
-        name: "Remanso",
-        short_name: "Remanso",
-        description: "Note taking & sharing app",
+        name: "Remanso Studio",
+        short_name: "Studio",
+        description: "Record, cut and mix audio, then publish it to your PDS.",
         background_color: "#ffa4c0",
         theme_color: "#ffa4c0",
         icons: [

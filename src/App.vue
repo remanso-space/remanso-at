@@ -13,7 +13,7 @@ const routes = [
 
     <h1 class="mt-6 flex items-center gap-4 text-5xl font-bold text-[var(--hw-ink)]">
       <img src="/pwa-192x192.png" alt="" class="size-12 shrink-0" />
-      remanso.at
+      Remanso Studio
     </h1>
 
     <p class="mt-6 text-[var(--hw-ink-soft)]">
