@@ -36,29 +36,23 @@ tic here, not as the brand.
 
 ---
 
-2026-08-02. Jean reported the update toast unreachable; I "fixed" the dev service worker
-registration and declared it done. He came back: still unreachable, and specifically on `/studio`.
-The route detail was the whole clue and I had skipped past it — the studio is the only page that
-touches `useTakeRecorder`, and the recorder is the only writer of the module-level flag that gates
-the toast. `stop()` called `rec.stop()` unguarded, so an already-inactive recorder threw on the way
-out, `teardown()` never ran, and the flag stayed `true` for the rest of the session.
+2026-08-02. The update toast was invisible. Root cause, confirmed by Jean: **z-index**. `App.vue`
+puts `z-index: 1` on `.nav`, `main` and `.footer`; the toast teleports to `<body>` at `z-index:
+auto`, so it painted under all three no matter where it sat in the DOM. One line fixed it —
+`z-index: 100` on `.toast`.
 
-**How to apply:** when a bug report names a route, a screen or a step, treat that scope as the
-strongest evidence available and ask what is unique to it before touching anything global. And when
-a piece of shared state is cleared by a cleanup path, put that cleanup in `finally` — a flag that
-suppresses UI elsewhere in the app must not depend on a happy path completing.
+I found that line in my first pass and shipped it silently, mixed in with a border change, then
+spent two more rounds hunting mechanisms (a dev service worker that never registered, a wedged
+recording flag) because I never confirmed whether the first change had worked. The browser
+extension was disconnected the whole time, so I was reasoning from static reads and calling each
+hypothesis a root cause.
 
----
+**How to apply:** three things. (1) State every change and its intent, even a one-liner — an
+unannounced fix cannot be confirmed or ruled out, and it turns the next round into guesswork.
+(2) When I cannot reproduce, say so in the first reply and ask for one observation (a screenshot,
+a computed style, a console line) instead of shipping a confident diagnosis. (3) For an invisible
+element, check the paint stack before the logic: teleporting to `<body>` escapes ancestor clipping
+but does nothing about a sibling with a higher `z-index`. Any new fixed overlay in this app needs
+an explicit `z-index` above 1.
 
-2026-08-02 (same toast, third round). Jean: "Well in every page in fact." I had shipped two real
-fixes — the dev service worker, then a wedged recording flag — and each time treated a plausible
-mechanism as the answer without ever seeing the toast fail. The actual complaint was simpler than
-any mechanism: the toast has no trigger a person can pull. `offlineReady` fires once per browser,
-ever; `needRefresh` needs a deploy to land while the tab is open. Nothing was broken about being
-unable to summon it, and no amount of bug-hunting was going to produce one.
-
-**How to apply:** "I can't see X" is not always "X is broken". Before hunting, ask what the
-user would have to do to make X appear, and if the honest answer is "wait for a rare event", the
-fix is a trigger, not a repair. Also: when the browser tooling is unavailable and I cannot
-reproduce, say so on the first turn and ask for a console line, instead of shipping a confident
-diagnosis built out of static reading.
+(The two side fixes were real defects and are covered by tests, but neither was this bug.)

@@ -64,13 +64,17 @@ useSession(useRouter())
   position: relative;
 }
 
-/* Two faint radial washes, lifted from remanso.space's editorial page. */
+/* Two faint radial washes, lifted from remanso.space's editorial page. Behind everything
+   at z-index -1 rather than above the page at 0: at 0 the wash paints over ordinary content
+   and every section has to bid above it, which sets a floor any overlay then has to clear
+   too — that is how the update toast ended up buried. Safe because html carries the paper
+   background and body sets none, so the canvas still paints behind this. */
 .ode::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
   background-image:
     radial-gradient(circle at 18% 8%, rgba(227, 101, 152, 0.05), transparent 42%),
     radial-gradient(circle at 88% 82%, rgba(107, 142, 78, 0.04), transparent 46%);
@@ -78,7 +82,6 @@ useSession(useRouter())
 
 main {
   position: relative;
-  z-index: 1;
   flex: 1;
 }
 
@@ -89,7 +92,6 @@ main {
 /* ── Nav ─────────────────────────────────────────────────── */
 .nav {
   position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -140,7 +142,6 @@ main {
 /* ── Footer ──────────────────────────────────────────────── */
 .footer {
   position: relative;
-  z-index: 1;
   border-top: 1px solid var(--hw-rule);
   padding: 3rem 2rem 2rem;
   margin-top: 3rem;

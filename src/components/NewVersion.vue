@@ -68,7 +68,6 @@ const close = () => {
   border: 2px solid var(--hw-pink);
   background: var(--hw-surface);
   box-shadow: 0 8px 24px rgba(31, 27, 24, 0.1);
-  z-index: 100;
   font-family: var(--hw-serif);
   color: var(--hw-ink);
 }
