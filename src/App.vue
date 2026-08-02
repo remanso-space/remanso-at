@@ -2,9 +2,8 @@
 import NewVersion from "./components/NewVersion.vue"
 
 const routes = [
-  { path: "/listen", label: "read what is published" },
-  { path: "/studio", label: "record it out loud" },
-  { path: "/ambient", label: "sit next to some noise" },
+  { path: "/studio", label: "record it, cut it, mix it" },
+  { path: "/listen", label: "browse what has been recorded" },
 ]
 </script>
 

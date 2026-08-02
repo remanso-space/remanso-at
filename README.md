@@ -7,11 +7,10 @@ Deployed at https://remanso.at
 Sibling to [remanso.space](https://remanso.space), which is the writing tool. This is the other half
 of the pair: what happens to a note once it is public.
 
-| Route      | What                                                                                                                                                                                                                    |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/listen`  | Published `space.remanso.note` records from the [appview](https://api.remanso.space), rendered plainly. remanso.space stays canonical for `/pub/…` URLs; this reader links back with `rel="canonical"`.                 |
-| `/studio`  | Multi-take capture, derush, non-destructive trim, a post-production chain, and spot-placed music or ambient cues. Publishes a `space.remanso.recording` and hands you the markdown link to paste into a `.pub.md` note. |
-| `/ambient` | Procedurally generated beds. Nothing is sampled, so there is nothing to license and no loop seams.                                                                                                                      |
+| Route     | What                                                                                                                                                                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/studio` | Multi-take capture, derush, non-destructive trim, a post-production chain, and spot-placed music, sound effects or ambient beds mixed into the render. Publishes a `space.remanso.recording` and hands you the markdown link to paste into a note.     |
+| `/listen` | Browse `space.remanso.recording` — yours from your PDS, everyone's from the [appview](https://api.remanso.space) once it indexes them. Notes themselves are not rendered here; links to a note open remanso.space, which stays canonical for `/pub/…`. |
 
 ## Why the studio hands you a link
 
@@ -30,12 +29,27 @@ Paste it into the note, commit, and the existing GitHub Action republishes with 
 `/studio` lists your published notes and marks which ones already have a recording, so you can see
 what is still silent.
 
+## Browsing recordings needs an appview change
+
+`/listen` browses recordings, not notes. Two tiers, and only one of them works today:
+
+- **Your own recordings** come from `com.atproto.repo.listRecords` against your PDS. No appview, no
+  new infrastructure.
+- **Everyone's recordings** need `remanso-jetstream` to ingest them. Its
+  `wantedCollections` is `["space.remanso.note"]` today, so `space.remanso.recording` is never
+  indexed and there is no way to discover anyone else's. That is a change in the appview repo: add
+  the collection, add a `recording` table, expose `GET /recordings` and `GET /:did/recordings`.
+
+Playback downloads the blob and plays from an object URL rather than streaming it.
+`com.atproto.sync.getBlob` ignores `Range` (verified), so streaming would not let you seek — and the
+waveform needs the whole buffer anyway.
+
 ## Plan
 
 ```macroplan
 title = "remanso.at"
 start = 2026-08-03
-end = 2026-11-23
+end = 2026-11-09
 
 [[feature]]
 name = "Domain handover + deploy"
@@ -59,38 +73,34 @@ status = "on-track"
 note = "Own client-metadata.json as Remanso Studio; sessions cannot be shared with remanso.space."
 
 [[feature]]
-name = "Ambient room"
-start = 2026-08-17
-original = 2026-08-24
-status = "on-track"
-note = "No auth, no storage, so it stays cheap and anonymous visitors can use it. Proves the pure-TS DSP engine before the renderer depends on it."
-
-[[feature]]
 name = "Studio — capture to link"
-start = 2026-08-24
-original = 2026-09-21
+start = 2026-08-17
+original = 2026-09-14
 status = "on-track"
 note = "The two hard pieces land here: OPFS chunk streaming and the windowed multi-track renderer."
 
 [[feature]]
 name = "Derush"
-start = 2026-09-21
-original = 2026-10-12
+start = 2026-09-14
+original = 2026-10-05
 
 [[feature]]
-name = "Cue track — music & sounds"
-start = 2026-10-12
+name = "Cue track — music, sounds, ambient"
+start = 2026-10-05
+original = 2026-10-26
+note = "Procedural ambient beds live here as one kind of cue clip, not as a standalone page."
+
+[[feature]]
+name = "Appview indexes recordings"
+start = 2026-10-19
 original = 2026-11-02
+note = "remanso-jetstream repo. wantedCollections is notes-only today, so nobody can discover anyone else's recordings until this lands."
 
 [[feature]]
-name = "Reader — /listen"
-start = 2026-11-02
-original = 2026-11-16
-
-[[feature]]
-name = "PWA"
-start = 2026-11-16
-original = 2026-11-23
+name = "Recordings browser — /listen"
+start = 2026-10-26
+original = 2026-11-09
+note = "Own recordings work from listRecords with no appview; the public tier needs the row above."
 
 [[milestone]]
 name = "Live at remanso.at"
@@ -98,36 +108,40 @@ week = 2026-08-10
 requires = ["Domain handover + deploy", "The ode — landing page"]
 
 [[milestone]]
-name = "Sign in and listen to noise"
-week = 2026-08-24
-requires = ["ATProto sign-in", "Ambient room"]
+name = "Signed in"
+week = 2026-08-17
+requires = ["ATProto sign-in"]
 
 [[milestone]]
 name = "First episode recorded"
-week = 2026-09-21
+week = 2026-09-14
 requires = ["Studio — capture to link"]
 
 [[milestone]]
 name = "Real post-production"
-week = 2026-11-02
-requires = ["Derush", "Cue track — music & sounds"]
+week = 2026-10-26
+requires = ["Derush", "Cue track — music, sounds, ambient"]
 
 [[milestone]]
 name = "1.0"
-week = 2026-11-23
+week = 2026-11-09
 requires = [
-  "Reader — /listen",
-  "PWA",
+  "Appview indexes recordings",
+  "Recordings browser — /listen",
 ]
 ```
 
 Flagging while recording sits in the studio slice rather than derush. It is about ten lines, and it
 has to exist at capture time to be worth anything.
 
+PWA identity shipped early, with slice 0 — the manifest, icons and update toast are already live and
+match remanso.space. The one piece left is suppressing that toast while a take is recording, which
+rides along with the studio slice.
+
 Not in scope: RSS. There is no atproto podcast client, and a real feed would need a caching proxy
 somewhere off-box, since everything in this ecosystem shares one host and podcast bursts would
-starve the firehose listener. Episodes play on their note's page. The findings are written up in the
-plan doc if that changes.
+starve the firehose listener. Recordings play in the browser here and inside their note on
+remanso.space. The findings are written up in the plan doc if that changes.
 
 ## Develop
 

@@ -9,7 +9,13 @@ This file only covers what slice 0 actually did and what a fresh session needs t
 ## What shipped
 
 A Vue 3 SPA on the apoena house stack, deployed at https://remanso.at, showing a holding page that
-names the three routes to come. No auth, no audio, no router yet.
+names the two routes to come. No auth, no audio, no router yet.
+
+Scope corrected 2026-08-02, after the holding page shipped: **there is no `/ambient` page.** Ambient
+sound is a studio feature — beds mixed into the render, alongside spot music and sound effects. And
+`/listen` browses `space.remanso.recording`, not notes; notes stay on remanso.space and a link to one
+navigates there. The public tier of that browser is blocked on `remanso-jetstream` indexing
+recordings, which it does not do today.
 
 |                          |                                                                                  |
 | ------------------------ | -------------------------------------------------------------------------------- |
@@ -132,6 +138,8 @@ do not copy `useMarkdown.hook.ts` or anything it pulls in.
 
 No router is installed yet. Slice 1 can stay single-page; add `vue-router` when `/listen` and
 `/studio` actually need routes.
+
+The route list in `src/App.vue` is `/studio` and `/listen` only. Do not reintroduce `/ambient`.
 
 ## Guardrails carried forward
 
