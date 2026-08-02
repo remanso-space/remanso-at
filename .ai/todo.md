@@ -42,5 +42,7 @@
 
 ## Wrap-up
 
-- [ ] README macroplan: mark "Studio — capture to link" delivered.
-- [ ] docs/handover/slice-4-*.md in slice-2 style.
+- [x] README macroplan: "Studio — capture to link" marked delivered (2026-08-17) + learning.
+- [x] docs/handover/slice-4-studio.md written (slice-2 style, honest about runtime-pending + deltas).
+- [ ] Commit StudioView.vue (double-publish guard + take preview) — still uncommitted.
+- [ ] Runtime acceptance on real browser + mic + iOS (blob measures -16 ±1 LUFS, note round-trip).

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue"
+import { onBeforeUnmount, onMounted, ref, watch } from "vue"
 
 import { useSession } from "../composables/useSession"
 import { useTakeRecorder } from "../composables/useTakeRecorder"
@@ -10,6 +10,7 @@ import {
 } from "../modules/atproto/publishedNotes"
 import type { Take } from "../modules/studio/edl.types"
 import { canEncodeOpus } from "../modules/studio/mediaCodec"
+import { deleteTake, readTakeFile } from "../modules/studio/opfsTakes"
 import { publishTake } from "../modules/studio/publishTake"
 import { formatDuration } from "../utils/formatDuration"
 
@@ -32,6 +33,21 @@ const publishState = ref<PublishState>("idle")
 const link = ref("")
 const publishError = ref<string | null>(null)
 const copied = ref(false)
+
+// A local preview of the recorded take, so you can hear it before publishing. The studio
+// has no player of its own beyond this (playback lives on the note page / slice 7).
+const previewUrl = ref<string | null>(null)
+const revokePreview = () => {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = null
+}
+watch(take, async (current) => {
+  revokePreview()
+  if (!current) return
+  const file = await readTakeFile(current.opfsPath)
+  if (file) previewUrl.value = URL.createObjectURL(file)
+})
+onBeforeUnmount(revokePreview)
 
 const loadNotes = async () => {
   if (!did.value) return
@@ -71,13 +87,26 @@ const stopRecording = async () => {
 }
 
 const discardTake = async () => {
-  if (take.value)
-    await import("../modules/studio/opfsTakes").then((m) => m.deleteTake(take.value!.opfsPath))
+  if (take.value) await deleteTake(take.value.opfsPath)
   take.value = null
+  publishState.value = "idle"
+  link.value = ""
+}
+
+// After a successful publish this take is spent — free its OPFS bytes (publish is the
+// durability boundary) and start fresh rather than letting the same audio publish twice.
+const startNewRecording = async () => {
+  if (take.value) await deleteTake(take.value.opfsPath)
+  take.value = null
+  publishState.value = "idle"
+  link.value = ""
 }
 
 const publish = async () => {
   if (!take.value || !did.value) return
+  // Guard against a double publish: only from idle or after a prior error, never re-run
+  // while publishing or once already done (that would create a duplicate recording).
+  if (publishState.value === "publishing" || publishState.value === "done") return
   publishState.value = "publishing"
   publishError.value = null
   const result = await publishTake({
@@ -189,30 +218,43 @@ const copyLink = async () => {
             <p class="review-head mono">
               Take: {{ formatDuration(take.durationSec) }} · {{ take.flags.length }} flags
             </p>
-            <label class="check">
-              <input v-model="removePauses" type="checkbox" />
-              Trim head/tail and remove long pauses
-            </label>
 
-            <div class="review-actions">
-              <button
-                class="btn primary"
-                :disabled="publishState === 'publishing'"
-                @click="publish"
-              >
-                {{ publishState === "publishing" ? "Rendering…" : "Render & publish" }}
-              </button>
-              <button class="btn" :disabled="publishState === 'publishing'" @click="discardTake">
-                Discard
-              </button>
-            </div>
+            <!-- Local preview of the raw take, so you can hear it before publishing. -->
+            <audio v-if="previewUrl" class="preview" :src="previewUrl" controls />
 
-            <p v-if="publishState === 'error'" class="error">{{ publishError }}</p>
+            <template v-if="publishState !== 'done'">
+              <label class="check">
+                <input v-model="removePauses" type="checkbox" />
+                Trim head/tail and remove long pauses
+              </label>
 
-            <div v-if="publishState === 'done'" class="published">
+              <div class="review-actions">
+                <button
+                  class="btn primary"
+                  :disabled="publishState === 'publishing'"
+                  @click="publish"
+                >
+                  {{ publishState === "publishing" ? "Rendering…" : "Render & publish" }}
+                </button>
+                <button class="btn" :disabled="publishState === 'publishing'" @click="discardTake">
+                  Discard
+                </button>
+              </div>
+
+              <p v-if="publishState === 'error'" class="error">{{ publishError }}</p>
+            </template>
+
+            <!-- Published: the take is spent. Offer the link and a fresh recording, never a
+                 second publish of the same audio. -->
+            <div v-else class="published">
               <p class="mono done-label">Published. Paste this into your note:</p>
               <textarea class="link-box mono" readonly :value="link" rows="2" />
-              <button class="btn" @click="copyLink">{{ copied ? "Copied ✓" : "Copy link" }}</button>
+              <div class="review-actions">
+                <button class="btn primary" @click="copyLink">
+                  {{ copied ? "Copied ✓" : "Copy link" }}
+                </button>
+                <button class="btn" @click="startNewRecording">Start a new recording</button>
+              </div>
             </div>
           </div>
 
@@ -382,6 +424,10 @@ const copyLink = async () => {
 .review-head {
   margin: 0 0 0.75rem;
   color: var(--hw-ink-faint);
+}
+.preview {
+  width: 100%;
+  margin: 0 0 1rem;
 }
 .check {
   display: flex;

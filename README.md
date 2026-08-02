@@ -76,8 +76,8 @@ learning = "Sign-in needed no new backend: client-metadata.json shipped in slice
 name = "Studio — capture to link"
 start = 2026-08-17
 original = 2026-09-14
-status = "on-track"
-note = "The two hard pieces land here: OPFS chunk streaming and the windowed multi-track renderer."
+delivered = 2026-08-17
+learning = "Built pure-core-first: the EDL, the windowed render chain (HPF + presence shelf → two-pass -16 LUFS → look-ahead limiter with a hard -1 dBFS guarantee), pause detection and clip assembly are all plain TypeScript with unit tests — the seam-free windowed-equality property and the brick-wall ceiling are asserted directly, so the renderer needed no browser to trust. Only the thin edges are browser-coupled: capture (MediaRecorder → OPFS chunk stream), mediabunny decode/encode, and the StudioView UI. The renderer is a synchronous function, not a Worker yet — fine for 20-minute takes, revisit past ~30 min. canEncodeAudio('opus') gates at session start because there is no original to fall back on. Two gotchas worth keeping: vitest 3 bundles vite 7 types that clash with this app's vite 8, so test config lives in a standalone vitest.config.ts kept out of every tsconfig; and esbuild needed a build-script decision in pnpm-workspace.yaml like sharp did. Flag-while-recording is captured onto the take but nothing consumes it yet — the derush pass that jumps between marks is the next slice."
 
 [[feature]]
 name = "Derush"
