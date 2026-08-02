@@ -1,17 +1,18 @@
 import { blobUrl, resolveActor } from "./resolveActor"
-import { RECORDING_COLLECTION, type Recording } from "./recording.types"
+import { RECORDING_COLLECTION, type Recording, type RecordingCredit } from "./recording.types"
 import type { ListenRecording } from "./listRecordings"
 
 // The everyone tier. `listRecordings` reads one repo straight off its PDS; this reads the
-// appview, which is the only place that has seen every author's recordings — the PDS knows
-// only its own. The appview returns flat rows (it does not hold the blobs), so each row's
-// DID is resolved to its PDS to build a playable getBlob URL, exactly as the per-repo path
-// does. The note link is left off here: the appview does not say whether a note sits at the
-// recording's rkey, and a link to a note that may not exist is worse than none.
+// appview, the only place that has seen every author's recordings — a PDS knows only its
+// own. The appview row is flat and self-sufficient (title, duration, credits and all), so
+// there is no per-row getRecord: the only lookup is the author's PDS to build a getBlob URL,
+// resolved once per DID and reused. The note link is left off — the appview does not say
+// whether a note sits at the recording's rkey, and a link to a maybe-absent note is worse
+// than none.
 
 export const APPVIEW_BASE = "https://api.remanso.space"
 
-/** One row of the appview's `/recordings` feed — flat, blob-less, already indexed. */
+/** One row of the appview's `/recordings` feed — flat, already indexed, blobs aside. */
 interface AppviewRecording {
   did: string
   rkey: string
@@ -21,7 +22,8 @@ interface AppviewRecording {
   createdAt: string
   blobCid: string
   mimeType: string
-  size: number
+  size?: number
+  credits?: RecordingCredit[]
 }
 
 export type ListAllRecordingsResult =
@@ -50,12 +52,18 @@ const pdsFor = async (did: string): Promise<string | null> => {
 
 const toListen = (row: AppviewRecording, pds: string): ListenRecording => {
   const value: Recording = {
-    audio: { $type: "blob", ref: { $link: row.blobCid }, mimeType: row.mimeType, size: row.size },
+    audio: {
+      $type: "blob",
+      ref: { $link: row.blobCid },
+      mimeType: row.mimeType,
+      size: row.size ?? 0,
+    },
     createdAt: row.createdAt,
   }
   if (row.title) value.title = row.title
   if (row.durationSec !== undefined) value.durationSec = row.durationSec
   if (row.recordedAt) value.recordedAt = row.recordedAt
+  if (row.credits?.length) value.credits = row.credits
 
   return {
     uri: `at://${row.did}/${RECORDING_COLLECTION}/${row.rkey}`,

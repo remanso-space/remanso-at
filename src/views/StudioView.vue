@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 
 import MusicSlotPanel from "../components/studio/MusicSlotPanel.vue"
 import DerushPanel from "../components/studio/DerushPanel.vue"
@@ -23,6 +23,7 @@ import { canEncodeOpus } from "../modules/studio/mediaCodec"
 import { deletePeaks, writePeaks } from "../modules/studio/opfsPeaks"
 import { deleteTake, readTakeFile } from "../modules/studio/opfsTakes"
 import { publishSession } from "../modules/studio/publishSession"
+import { renderToPcm, type RenderProgress } from "../modules/studio/renderToPcm"
 import { formatDuration } from "../utils/formatDuration"
 
 const { isLoggedIn, handle, did } = useSession()
@@ -59,6 +60,76 @@ const publishState = ref<PublishState>("idle")
 const link = ref("")
 const publishError = ref<string | null>(null)
 const copied = ref(false)
+
+// One bar, shared by publish and preview: both run the same decode-and-render, so both
+// report through the same reading and the template shows whichever is live.
+const progress = ref<RenderProgress | null>(null)
+
+// The final-cut preview: render exactly what publish would — pauses removed, intro and
+// breaks assembled, chain applied — and play the samples straight back through WebAudio so
+// the author hears the deliverable before committing it. No encode, no upload.
+type PreviewState = "idle" | "rendering" | "playing"
+const previewState = ref<PreviewState>("idle")
+const previewError = ref<string | null>(null)
+let previewCtx: AudioContext | null = null
+let previewSource: AudioBufferSourceNode | null = null
+
+const stopPreview = () => {
+  if (previewSource) {
+    previewSource.onended = null
+    try {
+      previewSource.stop()
+    } catch {
+      // Already stopped or never started — nothing to do.
+    }
+    previewSource = null
+  }
+  void previewCtx?.close()
+  previewCtx = null
+  if (previewState.value === "playing") previewState.value = "idle"
+}
+
+const previewFinal = async () => {
+  if (previewState.value === "playing" || previewState.value === "rendering") {
+    stopPreview()
+    previewState.value = "idle"
+    return
+  }
+  previewError.value = null
+  previewState.value = "rendering"
+  progress.value = { fraction: 0, label: "Rendering the programme…" }
+  try {
+    const result = await renderToPcm({
+      session: session.value,
+      takePcm,
+      onProgress: (p) => (progress.value = p),
+    })
+    if (!result.ok) {
+      previewError.value = result.error
+      previewState.value = "idle"
+      return
+    }
+    const { samples } = result.render
+    const ctx = new AudioContext()
+    const buffer = ctx.createBuffer(1, samples.length, SESSION_SAMPLE_RATE)
+    buffer.getChannelData(0).set(samples)
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.connect(ctx.destination)
+    source.onended = () => stopPreview()
+    previewCtx = ctx
+    previewSource = source
+    previewState.value = "playing"
+    source.start()
+  } catch (err) {
+    previewError.value = err instanceof Error ? err.message : "The preview could not be rendered."
+    previewState.value = "idle"
+  } finally {
+    progress.value = null
+  }
+}
+
+onBeforeUnmount(stopPreview)
 
 // What this cut attached itself to, snapshotted at publish. The note list stays live
 // underneath, and picking another note afterwards must not rewrite the confirmation.
@@ -145,6 +216,8 @@ const stopRecording = async () => {
 
 /** Free every take's bytes and start from an empty EDL. */
 const resetSession = async () => {
+  stopPreview()
+  previewError.value = null
   for (const take of session.value.takes) {
     await deleteTake(take.opfsPath)
     await deletePeaks(take.peaksPath)
@@ -178,28 +251,40 @@ const publish = async () => {
     return
   }
 
+  stopPreview()
   publishState.value = "publishing"
   publishError.value = null
-  const result = await publishSession({
-    did: did.value,
-    session: session.value,
-    title: title.value || "Untitled",
-    takePcm,
-    noteRkey,
-  })
-  if (result.ok) {
-    link.value = result.link ?? ""
-    attachedTo.value =
-      note && noteRkey
-        ? { title: note.record.value.title, url: noteUrl(did.value, noteRkey) }
-        : null
-    publishState.value = "done"
-    // The row's ♪ marker is now wrong for the note we just wrote to; refetch so a later
-    // publish onto it warns about replacing this cut.
-    if (note) void loadNotes()
-  } else {
-    publishError.value = result.error
+  progress.value = { fraction: 0, label: "Preparing…" }
+  try {
+    const result = await publishSession({
+      did: did.value,
+      session: session.value,
+      title: title.value || "Untitled",
+      takePcm,
+      noteRkey,
+      onProgress: (p) => (progress.value = p),
+    })
+    if (result.ok) {
+      link.value = result.link ?? ""
+      attachedTo.value =
+        note && noteRkey
+          ? { title: note.record.value.title, url: noteUrl(did.value, noteRkey) }
+          : null
+      publishState.value = "done"
+      // The row's ♪ marker is now wrong for the note we just wrote to; refetch so a later
+      // publish onto it warns about replacing this cut.
+      if (note) void loadNotes()
+    } else {
+      publishError.value = result.error
+      publishState.value = "error"
+    }
+  } catch (err) {
+    // A thrown render (e.g. a Worker clone failure that escapes the fallback) must not leave
+    // the button spinning on "Rendering…" forever — surface it as an error the author sees.
+    publishError.value = err instanceof Error ? err.message : "Rendering failed unexpectedly."
     publishState.value = "error"
+  } finally {
+    progress.value = null
   }
 }
 
@@ -322,8 +407,17 @@ const copyLink = async () => {
             <template v-if="publishState !== 'done'">
               <div class="review-actions">
                 <button
-                  class="btn primary"
+                  class="btn"
                   :disabled="publishState === 'publishing' || !hasProgramme"
+                  @click="previewFinal"
+                >
+                  {{ previewState === "playing" ? "❚❚ Stop preview" : "▶ Preview final" }}
+                </button>
+                <button
+                  class="btn primary"
+                  :disabled="
+                    publishState === 'publishing' || previewState !== 'idle' || !hasProgramme
+                  "
                   @click="publish"
                 >
                   {{ publishState === "publishing" ? "Rendering…" : "Render & publish" }}
@@ -333,10 +427,35 @@ const copyLink = async () => {
                 </button>
               </div>
 
+              <p class="preview-hint mono">
+                Preview plays the final cut — pauses removed, intro and breaks under it — before you
+                publish.
+              </p>
+
+              <!-- One bar for both render paths, with the live stage under it. -->
+              <div
+                v-if="progress"
+                class="progress"
+                role="progressbar"
+                :aria-valuenow="Math.round(progress.fraction * 100)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div class="progress-track">
+                  <div class="progress-fill" :style="{ width: `${progress.fraction * 100}%` }" />
+                </div>
+                <p class="progress-label mono">{{ progress.label }}</p>
+              </div>
+
               <p v-if="!hasProgramme" class="review-head mono">
                 Every region is rejected or muted — there is nothing to render.
               </p>
-              <p v-if="publishState === 'error'" class="error">{{ publishError }}</p>
+              <p v-if="publishState === 'error'" class="error big-error" role="alert">
+                <span class="error-mark" aria-hidden="true">⚠</span> {{ publishError }}
+              </p>
+              <p v-if="previewError" class="error big-error" role="alert">
+                <span class="error-mark" aria-hidden="true">⚠</span> {{ previewError }}
+              </p>
             </template>
 
             <!-- Published: this cut is spent. Offer a fresh session, never a second publish
@@ -603,6 +722,47 @@ const copyLink = async () => {
   color: #c0392b;
   font-size: 0.9rem;
   margin: 0.75rem 0 0;
+}
+.preview-hint {
+  font-size: 0.78rem;
+  color: var(--hw-ink-faint);
+  margin: 0.6rem 0 0;
+}
+.progress {
+  margin: 0.9rem 0 0;
+}
+.progress-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--hw-pink-wash);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--hw-pink);
+  border-radius: 4px;
+  transition: width 200ms ease;
+}
+.progress-label {
+  font-size: 0.78rem;
+  color: var(--hw-ink-faint);
+  margin: 0.35rem 0 0;
+}
+/* An error the author must not miss: boxed, ink on a wash, not a thin grey line. */
+.big-error {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: 1px solid #c0392b;
+  border-radius: 6px;
+  background: rgba(192, 57, 43, 0.08);
+  padding: 0.7rem 0.9rem;
+  margin-top: 0.9rem;
+}
+.error-mark {
+  font-size: 1.05rem;
 }
 .notes {
   margin: 0 0 2rem;

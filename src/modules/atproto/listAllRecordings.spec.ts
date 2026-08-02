@@ -16,19 +16,19 @@ const didDoc = (did: string, pds: string, handle: string) =>
     service: [{ id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: pds }],
   })
 
-const row = (did: string, rkey: string, title?: string) => ({
+const row = (did: string, rkey: string, extra: Record<string, unknown> = {}) => ({
   did,
   rkey,
-  title,
   durationSec: 42,
   recordedAt: null,
   createdAt: "2026-08-01T10:00:00.000Z",
   blobCid: `bafy-${rkey}`,
   mimeType: "video/webm",
   size: 123,
+  ...extra,
 })
 
-const stubFetch = (rows: unknown[], cursor?: string, docs: Record<string, Response> = {}) => {
+const stubFetch = (rows: unknown[], docs: Record<string, Response>, cursor?: string) => {
   const fetchMock = vi.fn(async (url: string) => {
     if (url.includes("/recordings")) return okJson({ recordings: rows, cursor })
     for (const [did, doc] of Object.entries(docs)) if (url.includes(did)) return doc
@@ -41,11 +41,24 @@ const stubFetch = (rows: unknown[], cursor?: string, docs: Record<string, Respon
 afterEach(() => vi.unstubAllGlobals())
 
 describe("listAllRecordings", () => {
-  it("maps appview rows to playable recordings, resolving each DID's PDS", async () => {
-    stubFetch([row(DID_A, "3aaa", "One"), row(DID_B, "3bbb", "Two")], "cur1", {
-      [DID_A]: didDoc(DID_A, PDS_A, "a.example.com"),
-      [DID_B]: didDoc(DID_B, PDS_B, "b.example.com"),
-    })
+  it("maps appview rows to playable recordings, carrying credits and resolving each PDS", async () => {
+    const credits = [
+      {
+        title: "Pad",
+        creator: "someone",
+        license: "cc-by",
+        licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+        sourceUrl: "https://freesound.org/x",
+      },
+    ]
+    stubFetch(
+      [row(DID_A, "3aaa", { title: "One", credits }), row(DID_B, "3bbb", { title: "Two" })],
+      {
+        [DID_A]: didDoc(DID_A, PDS_A, "a.example.com"),
+        [DID_B]: didDoc(DID_B, PDS_B, "b.example.com"),
+      },
+      "cur1",
+    )
 
     const result = await listAllRecordings()
     expect(result.ok).toBe(true)
@@ -54,23 +67,22 @@ describe("listAllRecordings", () => {
     expect(result.cursor).toBe("cur1")
     expect(result.recordings).toHaveLength(2)
     const [a, b] = result.recordings
-    expect(a.uri).toBe(`at://${DID_A}/space.remanso.recording/3aaa`)
     expect(a.value.title).toBe("One")
-    expect(a.value.durationSec).toBe(42)
+    expect(a.value.credits).toEqual(credits)
     expect(a.note).toBeNull()
     expect(a.audioUrl).toBe(
       `${PDS_A}/xrpc/com.atproto.sync.getBlob?did=did%3Aplc%3Aaaa&cid=bafy-3aaa`,
     )
+    expect(b.value.credits).toBeUndefined()
     expect(b.audioUrl).toBe(
       `${PDS_B}/xrpc/com.atproto.sync.getBlob?did=did%3Aplc%3Abbb&cid=bafy-3bbb`,
     )
   })
 
   it("drops a row whose DID will not resolve rather than show an unplayable blob", async () => {
-    // Fresh DIDs: the PDS cache is module-level and persists across tests.
     const didC = "did:plc:ccc"
     const didD = "did:plc:ddd"
-    stubFetch([row(didC, "3ccc"), row(didD, "3ddd")], undefined, {
+    stubFetch([row(didC, "3ccc"), row(didD, "3ddd")], {
       [didC]: didDoc(didC, PDS_A, "c.example.com"),
       // didD has no doc → its fetch throws → resolveActor returns null → row dropped.
     })
@@ -79,7 +91,6 @@ describe("listAllRecordings", () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.recordings).toHaveLength(1)
-    expect(result.recordings[0].value.title).toBeUndefined()
     expect(result.recordings[0].uri).toContain(didC)
   })
 

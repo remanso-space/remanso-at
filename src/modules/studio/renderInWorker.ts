@@ -1,3 +1,5 @@
+import { toRaw } from "vue"
+
 import { renderSession, type CuePcm, type SessionRender, type TakePcm } from "./assemble"
 import type { Session } from "./edl.types"
 
@@ -56,7 +58,15 @@ export const renderSessionInWorker = (
     worker.onerror = fallback
     worker.onmessageerror = fallback
 
-    const request: RenderRequest = { session, takePcm, sampleRate, cuePcm }
-    worker.postMessage(request)
+    // The session arrives from the studio as a Vue reactive object; structuredClone chokes
+    // on its proxy ("Proxy object could not be cloned") and, thrown here inside the executor,
+    // that rejects the whole publish. Unwrap to the raw target first, and still guard the
+    // post: any clone failure falls back to the synchronous render rather than killing it.
+    const request: RenderRequest = { session: toRaw(session), takePcm, sampleRate, cuePcm }
+    try {
+      worker.postMessage(request)
+    } catch {
+      fallback()
+    }
   })
 }

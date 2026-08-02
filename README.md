@@ -29,16 +29,14 @@ Paste it into the note, commit, and the existing GitHub Action republishes with 
 `/studio` lists your published notes and marks which ones already have a recording, so you can see
 what is still silent.
 
-## Browsing recordings needs an appview change
+## Browsing recordings
 
-`/listen` browses recordings, not notes. Two tiers, and only one of them works today:
-
-- **Your own recordings** come from `com.atproto.repo.listRecords` against your PDS. No appview, no
-  new infrastructure.
-- **Everyone's recordings** need `remanso-jetstream` to ingest them. Its
-  `wantedCollections` is `["space.remanso.note"]` today, so `space.remanso.recording` is never
-  indexed and there is no way to discover anyone else's. That is a change in the appview repo: add
-  the collection, add a `recording` table, expose `GET /recordings` and `GET /:did/recordings`.
+`/listen` browses recordings, not notes, in two scopes. **One repo** — your own, or any
+`?handle=`/`?did=` — reads `com.atproto.repo.listRecords` straight off that PDS, no appview
+needed. **Everyone** comes from the appview at [api.remanso.space](https://api.remanso.space),
+which indexes every `space.remanso.recording` off the firehose; because the appview is an index
+and holds no blobs, each row is hydrated from its author's PDS with `getRecord` for playback and
+credits. The everyone feed is the signed-out default; a named repo takes over when one is in focus.
 
 Playback downloads the blob and plays from an object URL rather than streaming it.
 `com.atproto.sync.getBlob` ignores `Range` (verified), so streaming would not let you seek — and the
@@ -112,7 +110,7 @@ name = "Recordings browser — /listen"
 start = 2026-10-26
 original = 2026-11-09
 delivered = 2026-10-26
-learning = "Two scopes behind one view. A single repo is read straight off its PDS: resolveActor maps a handle or DID to its PDS endpoint and listRecordings pulls that repo's recordings plus the notes that name them with listRecords — public and per-author, no appview in between, so an author sees their own cuts the moment the studio publishes. The everyone tier is the appview's job because a PDS only knows its own repo: listAllRecordings reads api.remanso.space/recordings, then — since the appview holds no blobs — resolves each row's DID to its PDS (cached per DID) to build the same getBlob URL, dropping any row whose DID will not resolve rather than showing an unplayable clip. ListenView defaults to everyone when no repo is in focus (signed out, or ?all=1) and to the named repo otherwise. The appview note link is left off the everyone feed: the index does not say whether a note sits at the recording's rkey, and a link to a maybe-absent note is worse than none. Dropped a stray reverse=true in listPublishedNotes along the way — listRecords already orders by TID descending, so it had been walking from the oldest note."
+learning = "Two scopes behind one view. A single repo is read straight off its PDS: resolveActor maps a handle or DID to its PDS endpoint and listRecordings pulls that repo's recordings plus the notes that name them with listRecords — public and per-author, no appview in between, so an author sees their own cuts the moment the studio publishes. The everyone tier is the appview's job because a PDS only knows its own repo: listAllRecordings reads api.remanso.space/recordings, whose rows are flat and self-sufficient — title, duration, and the music credits the appview now indexes alongside the record, so a feed of N recordings costs no per-row getRecord. The only lookup left is the author's PDS to build a getBlob URL, resolved once per DID and cached; a row whose DID will not resolve is dropped rather than shown with an unplayable blob. Getting credits there meant a change in remanso-jetstream: a credits column on the recording table, extracted in recordingFromEvent and returned parsed on /recordings, backfilled for rows indexed before it. ListenView defaults to everyone when no repo is in focus (signed out, or ?all=1) and to the named repo otherwise. The note link is left off the everyone feed: the appview does not say whether a note sits at the recording's rkey, and a link to a maybe-absent note is worse than none. Dropped a stray reverse=true in listPublishedNotes along the way — listRecords already orders by TID descending, so it had been walking from the oldest note."
 
 [[milestone]]
 name = "Live at remanso.at"

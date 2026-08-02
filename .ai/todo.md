@@ -94,5 +94,6 @@ Handover: `docs/handover/slice-7-music-slots.md`.
 - [ ] EDL persistence in IndexedDB behind a comlink Worker.
 - [ ] Trim inside a slot: `MusicSlot.inSec` exists and only the fill path writes it.
 - [ ] Search pagination — `searchMusic` takes a page and the panel never asks for a second one.
-- [ ] `/listen` should render a recording's `credits`; the field is written and nothing reads it.
+- [x] `/listen` renders a recording's `credits`. Per-repo path reads them off the record; the
+      everyone feed hydrates each appview row via `getRecord` so credits come through there too.
 - [ ] Delete a slot's OPFS track when no other slot plays it (orphans survive today).

@@ -103,20 +103,34 @@ const seek = (sec: number) => {
   if (el) el.currentTime = clamped
 }
 
+// Each play/pause bumps this. A play() interrupted by a later pause() (pausing, or
+// shuttling backward) rejects with an AbortError long after the fact; without a token that
+// stale rejection would reset `rate` to 0 and cancel whatever the user just started — the
+// button "doing something" after a first play, and reverse dying the instant you shuttle
+// back off a forward play.
+let transportGen = 0
+
 const applyRate = () => {
   const el = audio.value
   if (!el) return
+  const gen = (transportGen += 1)
   if (rate.value > 0) {
     el.playbackRate = rate.value
     // Wrapped rather than chained: a media element that refuses to play may return
-    // nothing at all instead of a rejected promise.
-    void Promise.resolve(el.play()).catch(() => (rate.value = 0))
+    // nothing at all instead of a rejected promise. Only a still-current, still-forward
+    // play that genuinely failed drops the transport to paused.
+    void Promise.resolve(el.play()).catch(() => {
+      if (gen === transportGen && rate.value > 0) rate.value = 0
+    })
   } else {
     el.pause()
   }
 }
 
-watch(rate, applyRate)
+// Sync flush so the play()/pause() lands inside the click that set the rate — a microtask
+// later can fall outside the user-gesture window some autoplay policies check, and the
+// button feels laggy waiting for it.
+watch(rate, applyRate, { flush: "sync" })
 
 const togglePlay = () => (rate.value = rate.value === 0 ? 1 : 0)
 const shuttle = (direction: 1 | -1) => (rate.value = nextShuttleRate(rate.value, direction))

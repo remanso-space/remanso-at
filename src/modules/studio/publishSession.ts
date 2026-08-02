@@ -1,15 +1,11 @@
 import { recordingMarkdownLink } from "../atproto/publishedNotes"
 import { uploadRecording } from "../atproto/uploadRecording"
 import type { CuePcm, TakePcm } from "./assemble"
-import { renderSessionInWorker } from "./renderInWorker"
-import { speechTrack } from "./edl"
 import type { MusicCredit, Session } from "./edl.types"
 import { SESSION_SAMPLE_RATE } from "./edl.types"
-import { contentTier, decodeTakeToMono, encodeOpus } from "./mediaCodec"
-import { creditsToPublish, musicPathsInUse, programmeDurationSec } from "./musicSlots"
-import { analyzeTakeFile } from "./analyzeTake"
-import { readTakeFile } from "./opfsTakes"
-import { readCueFile } from "./opfsCues"
+import { contentTier, encodeOpus } from "./mediaCodec"
+import { creditsToPublish, programmeDurationSec } from "./musicSlots"
+import { renderToPcm, type RenderProgress } from "./renderToPcm"
 
 // The end of the line: render whatever the EDL currently says, encode it to Opus, and
 // write it to the PDS. With a `noteRkey` the deliverable is the record itself, put at the
@@ -36,6 +32,8 @@ export interface PublishParams {
   musicPcm?: CuePcm
   /** The rkey of the note being recorded against; the recording is written there. */
   noteRkey?: string
+  /** Coarse progress across decode, render, encode and upload — for the studio's bar. */
+  onProgress?: (progress: RenderProgress) => void
 }
 
 /**
@@ -62,16 +60,6 @@ export type PublishResult =
     }
   | { ok: false; error: string }
 
-/** Takes the timeline still plays. A take that every edit rejected need not be decoded. */
-const takeIdsInUse = (session: Session): Set<string> => {
-  const ids = new Set<string>()
-  for (const clip of speechTrack(session).clips) {
-    if (clip.muted) continue
-    if (clip.source.kind === "take") ids.add(clip.source.takeId)
-  }
-  return ids
-}
-
 export const publishSession = async ({
   did,
   session,
@@ -79,41 +67,24 @@ export const publishSession = async ({
   takePcm = {},
   musicPcm = {},
   noteRkey,
+  onProgress,
 }: PublishParams): Promise<PublishResult> => {
   if (programmeDurationSec(session) <= 0) {
     return { ok: false, error: "There is nothing to publish — every region is rejected or muted." }
   }
 
-  const pcm: TakePcm = { ...takePcm }
-  for (const takeId of takeIdsInUse(session)) {
-    if (pcm[takeId]) continue
-    const take = session.takes.find((t) => t.id === takeId)
-    if (!take) return { ok: false, error: "A take referenced by the edit is missing." }
+  // Decode-and-render owns the first three quarters of the bar; encode and upload split the
+  // rest. Scale the shared step's fraction into that window so the bar never jumps back.
+  const prepared = await renderToPcm({
+    session,
+    takePcm,
+    musicPcm,
+    onProgress: (p) => onProgress?.({ fraction: p.fraction * 0.75, label: p.label }),
+  })
+  if (!prepared.ok) return prepared
+  const rendered = prepared.render
 
-    const file = await readTakeFile(take.opfsPath)
-    if (!file) return { ok: false, error: "A take could not be read back from storage." }
-    const analyzed = await analyzeTakeFile(file, SESSION_SAMPLE_RATE)
-    if (!analyzed) return { ok: false, error: "A take could not be decoded." }
-    pcm[takeId] = analyzed.samples
-  }
-
-  // Music is decoded to mono at the session rate, the same as takes. One decode per track,
-  // however many slots play it.
-  const cuePcm: CuePcm = { ...musicPcm }
-  for (const path of musicPathsInUse(session)) {
-    if (cuePcm[path]) continue
-    const file = await readCueFile(path)
-    if (!file) return { ok: false, error: "A music track could not be read back from storage." }
-    const decoded = await decodeTakeToMono(file, SESSION_SAMPLE_RATE)
-    if (!decoded) return { ok: false, error: "A music track could not be decoded." }
-    cuePcm[path] = decoded.samples
-  }
-
-  const rendered = await renderSessionInWorker(session, pcm, SESSION_SAMPLE_RATE, cuePcm)
-  if (rendered.samples.length === 0) {
-    return { ok: false, error: "The render came out empty." }
-  }
-
+  onProgress?.({ fraction: 0.8, label: "Encoding to Opus…" })
   const encoded = await encodeOpus(
     rendered.samples,
     SESSION_SAMPLE_RATE,
@@ -123,6 +94,7 @@ export const publishSession = async ({
   )
   if (!encoded) return { ok: false, error: "Opus encoding failed." }
 
+  onProgress?.({ fraction: 0.9, label: "Uploading to your PDS…" })
   const credits = creditsToPublish(session)
   const result = await uploadRecording({
     did,
@@ -139,6 +111,7 @@ export const publishSession = async ({
     return { ok: false, error: `Publish failed (${result.reason}${detail}).` }
   }
 
+  onProgress?.({ fraction: 1, label: "Published." })
   return {
     ok: true,
     link: noteRkey ? null : withCredits(recordingMarkdownLink(result.uri, title), credits),
