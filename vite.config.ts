@@ -10,6 +10,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "prompt",
+      // Without this the dev server registers no service worker at all, so needRefresh
+      // never flips and the update toast is unreachable outside a production build.
+      devOptions: { enabled: true, type: "module", navigateFallback: "index.html" },
       // Deliberately omits favicon.png, which remanso.space does include. It is the
       // 1.4 MB source image for the asset generator and nothing in the HTML references
       // it, so precaching it would be ~22x the size of the entire JS bundle.

@@ -3,7 +3,15 @@ import { useRegisterSW } from "virtual:pwa-register/vue"
 
 import { useRecordingState } from "../composables/useRecordingState"
 
-const { offlineReady, needRefresh, updateServiceWorker } = useRegisterSW()
+// An open tab only looks for a new build on navigation, so a long session never sees the
+// prompt. Poll the registration hourly to close that gap.
+const UPDATE_CHECK_MS = 60 * 60 * 1000
+
+const { offlineReady, needRefresh, updateServiceWorker } = useRegisterSW({
+  onRegisteredSW(_url, registration) {
+    if (registration) setInterval(() => registration.update(), UPDATE_CHECK_MS)
+  },
+})
 // An update dialog mid-recording is hostile — hold the toast until the take is done.
 const { isRecording } = useRecordingState()
 
@@ -41,10 +49,10 @@ const close = () => {
   bottom: 1.5rem;
   width: 15rem;
   padding: 0.9rem 1rem;
-  border: 1px solid var(--hw-rule);
-  border-left: 3px solid var(--hw-pink);
+  border: 2px solid var(--hw-pink);
   background: var(--hw-surface);
   box-shadow: 0 8px 24px rgba(31, 27, 24, 0.1);
+  z-index: 100;
   font-family: var(--hw-serif);
   color: var(--hw-ink);
 }

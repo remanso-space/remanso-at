@@ -22,3 +22,14 @@ is about how I edited, not about which feature was right.)
 asserts and check each claim separately. A sentence that no longer justifies a _sequence_ may still
 justify the _scope_, the _cost_, or a _product guarantee_. Narrow the claim rather than deleting the
 sentence.
+
+---
+
+2026-08-02. Jean: "make border pink everywhere, stop to try to have only the left border colored."
+I had reached for the editorial left-accent bar (`border: 1px solid var(--hw-rule); border-left:
+3px solid var(--hw-pink)`) on the update toast and on `.page-note.danger`. It reads as a stylistic
+tic here, not as the brand.
+
+**How to apply:** in this project, an accented box gets its accent on the *whole* border —
+`border: 2px solid var(--hw-pink)`, or `border-color:` overriding a neutral base. Do not introduce
+`border-left`/`border-inline-start` accent bars.

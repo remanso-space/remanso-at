@@ -80,8 +80,16 @@ watch(isLoggedIn, (yes) => {
   if (yes) void loadNotes()
 })
 
+// The title field sits far above the note list, so a pick has to report itself down here:
+// the row stays marked and the confirmation line names what the title became.
+const pickedUri = ref("")
+const pickedTitle = computed(
+  () => notes.value.find((n) => n.record.uri === pickedUri.value)?.record.value.title ?? "",
+)
+
 const pickNote = (note: PublishedNote) => {
   title.value = note.record.value.title
+  pickedUri.value = note.record.uri
 }
 
 const startRecording = async () => {
@@ -307,13 +315,41 @@ const copyLink = async () => {
             <p v-if="loadingNotes" class="status">Loading…</p>
             <p v-else-if="notesError" class="error">{{ notesError }}</p>
             <ul v-else-if="notes.length" class="note-list">
-              <li v-for="n in notes" :key="n.record.uri" class="note-item">
-                <button class="note-pick" @click="pickNote(n)">{{ n.record.value.title }}</button>
-                <span v-if="n.hasAudio" class="badge mono" title="Already has audio">♪</span>
-                <span v-else class="badge badge-mute mono" title="No audio yet">—</span>
+              <li
+                v-for="n in notes"
+                :key="n.record.uri"
+                class="note-item"
+                :class="{ picked: n.record.uri === pickedUri }"
+              >
+                <button
+                  class="note-pick"
+                  :aria-pressed="n.record.uri === pickedUri"
+                  @click="pickNote(n)"
+                >
+                  {{ n.record.value.title }}
+                </button>
+                <span
+                  v-if="n.hasAudio"
+                  class="badge mono"
+                  role="img"
+                  aria-label="Already has audio"
+                  title="Already has audio"
+                  >♪</span
+                >
+                <span
+                  v-else
+                  class="badge badge-mute mono"
+                  role="img"
+                  aria-label="No audio yet"
+                  title="No audio yet"
+                  >—</span
+                >
               </li>
             </ul>
             <p v-else class="status">No published notes found on your PDS.</p>
+            <p v-if="pickedTitle" class="picked-line mono" role="status">
+              Title set to “{{ pickedTitle }}”.
+            </p>
             <p class="hint">
               Picking a note prefills the title; the link pastes as {{ recordingAltFor("title") }}.
             </p>
@@ -362,7 +398,7 @@ const copyLink = async () => {
   line-height: 1.55;
 }
 .page-note.danger {
-  border-left: 3px solid #c0392b;
+  border-color: #c0392b;
 }
 .status {
   color: var(--hw-ink-faint);
@@ -507,15 +543,27 @@ const copyLink = async () => {
 }
 .note-list {
   list-style: none;
-  padding: 0;
+  /* A long PDS scrolls inside the list instead of burying the rest of the page. Roughly ten
+     rows tall; the inline padding keeps focus rings off the scroll edge. */
+  max-height: 20rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.15rem;
   margin: 0.5rem 0 0;
 }
 .note-item {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.35rem 0;
+  padding: 0.35rem 0.5rem;
   border-bottom: 1px solid var(--hw-rule);
+}
+.note-item.picked {
+  background: var(--hw-pink-wash);
+  border-radius: 3px;
+}
+.note-item.picked .note-pick {
+  color: var(--hw-pink-deep);
 }
 .note-pick {
   flex: 1;
@@ -531,12 +579,23 @@ const copyLink = async () => {
 .note-pick:hover {
   color: var(--hw-pink-deep);
 }
+.note-pick:focus-visible {
+  outline: 2px solid var(--hw-pink);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 .badge {
   color: var(--hw-pink-deep);
   font-size: 0.9rem;
 }
+/* ink-faint is a ~2.6:1 grey — legible as a rule, not as a glyph that carries meaning. */
 .badge-mute {
-  color: var(--hw-ink-faint);
+  color: var(--hw-ink-soft);
+}
+.picked-line {
+  font-size: 0.8rem;
+  color: var(--hw-pink-deep);
+  margin: 0.6rem 0 0;
 }
 .hint {
   font-size: 0.8rem;
