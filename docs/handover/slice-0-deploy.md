@@ -21,8 +21,32 @@ names the three routes to come. No auth, no audio, no router yet.
 | Gitea webhook            | id 35, push events, to `platform.apoena.dev/webhooks/source/gitea/events/manual` |
 
 Versions installed: vite 8.2.0, vue 3.5.40, tailwindcss 4.3.3 (`@tailwindcss/vite`, no config
-file), daisyui 5.7.9, typescript ~6.0.2, vue-tsc 3.3.8, oxlint 1.76, oxfmt 0.61, pnpm 11.17.0
-(pinned via `packageManager`).
+file), daisyui 5.7.9, typescript ~6.0.2, vue-tsc 3.3.8, vite-plugin-pwa 1.3.0, oxlint 1.76,
+oxfmt 0.61, pnpm 11.17.0 (pinned via `packageManager`).
+
+### Identity is shared with remanso.space, deliberately
+
+One brand, one mark, one colour. The icon set is **copied verbatim** rather than regenerated, and
+`favicon.ico`, `masked-icon.png` and `pwa-512x512.png` were confirmed byte-identical to what
+remanso.space serves. `manifest.webmanifest` matches on `name`, `short_name`, `theme_color`
+(`#ffa4c0`), `background_color` and all five icons. `#ffa4c0` is also the `mask-icon` colour,
+`theme-color`, and DaisyUI's `--color-primary`.
+
+**Two pinks, on purpose, mirroring remanso.space:** `#ffa4c0` is the chrome colour, while
+`--hw-pink` `#e36598` stays the darker editorial accent its `WelcomeWorld.vue` uses for prose and
+rules. That is not an inconsistency to tidy up.
+
+To change any icon, change it in remanso.space and copy the files across —
+`@vite-pwa/assets-generator` is deliberately not used here (see the gotchas).
+
+`registerType: "prompt"` needs UI to actually apply updates, so `src/components/NewVersion.vue`
+renders the toast. **When the studio lands, suppress that toast while a take is recording** — an
+update dialog mid-recording is hostile.
+
+`client_name` in `client-metadata.json` is still `"Remanso Studio"`, not `"Remanso"`. That string is
+what a PDS consent screen and the user's revocation list display, and it is the one place where
+identical naming has a real cost: two clients both called "Remanso" cannot be told apart when
+revoking one. Say the word if you want it unified anyway.
 
 `origin` has one fetch URL (Gitea) and two push URLs, so a single `git push` writes both remotes.
 
@@ -60,6 +84,22 @@ curl -o /dev/null -w '%{content_type}\n'  https://remanso.at/client-metadata.jso
   The Coolify build log is the only feedback loop for Dockerfile changes.
 - `set -a; source ~/.config/apoena/coolify.env; set +a` — plain `source` leaves the UUIDs
   unexported, and anything reading `os.environ` then fails.
+- **`vite-plugin-pwa` drags in `sharp`, and pnpm 11 blocks the install until you decide about it.**
+  `@vite-pwa/assets-generator` is an optional peer that pnpm installs automatically, and it depends
+  on `sharp`. pnpm writes a `pnpm-workspace.yaml` stub reading `sharp: set this to true or false`
+  and fails with `ERR_PNPM_IGNORED_BUILDS` until it is resolved. It is set to `false` here, since
+  nothing runs the generator. **The Dockerfile must `COPY pnpm-workspace.yaml`** or the decision is
+  invisible inside the build and the install fails there while succeeding locally — deploy
+  `db7644f` failed exactly this way.
+- **`virtual:pwa-register/vue` needs `workbox-window` installed explicitly.** Without it the build
+  dies at `Rolldown failed to resolve import "workbox-window"`.
+- **nginx has no mime type for `.webmanifest`**, so the manifest was served as
+  `application/octet-stream`, which some browsers reject when judging installability. There is now
+  an explicit `location = /manifest.webmanifest` block, matching the one for
+  `client-metadata.json`.
+- **Missing paths return 200, not 404**, because of the SPA `try_files` fallback. `/favicon.png`
+  returning 200 does not mean the file exists — check `content_type`; the fallback answers
+  `text/html`.
 - **Tailwind v4's automatic source scan reads markdown, so docs were changing the CSS output.**
   A local build produced 20768 bytes of CSS against production's 18000, because `.dockerignore`
   strips markdown from the image but not from the working tree, and class names quoted in
@@ -80,8 +120,7 @@ Current state to build on:
   Libertinus Serif + Courier Prime, 2px radii, `--link-accent` for contrast-safe link colour, and
   a `.hw-label` class for `§ 01 —` mono section labels). DaisyUI's `light` theme is overridden so
   the palette reaches components as well as utilities. **Do not move the font `@import` off line 5.**
-- `src/components/RippleMark.vue` — the logo mark, Tabler `ripple`, inline so it follows
-  `currentColor`.
+- `src/components/NewVersion.vue` — the service-worker update toast.
 - `src/assets/icons/` — drop further Tabler outline SVGs here; see its README for the two usage
   patterns.
 
