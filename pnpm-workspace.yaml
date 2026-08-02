@@ -1,2 +1,9 @@
+# Not a workspace; pnpm 11 uses this file for build-script approval.
+#
+# sharp arrives as a transitive dep of @vite-pwa/assets-generator, which pnpm installs as
+# an optional peer of vite-plugin-pwa. Nothing here runs the generator (icons are copied
+# from remanso.space), so its native build is denied: it saves a slow compile and avoids
+# needing build tools in the alpine image. Without an explicit decision pnpm fails the
+# install with ERR_PNPM_IGNORED_BUILDS.
 allowBuilds:
-  sharp: set this to true or false
+  sharp: false

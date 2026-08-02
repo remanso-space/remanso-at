@@ -1,7 +1,8 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-# pnpm-lock.yaml* is globbed so the build still works before the lockfile is committed.
-COPY package.json pnpm-lock.yaml* ./
+# pnpm-workspace.yaml carries the build-script approvals; without it pnpm install fails
+# here with ERR_PNPM_IGNORED_BUILDS even though it succeeds locally.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable && pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
