@@ -87,13 +87,6 @@ delivered = 2026-09-14
 learning = "Slice 4's bet paid: derush is UI over an EDL that already rendered, so the whole pass is pure functions (derush.ts) plus two components, and undo is a list of past EDLs rather than inverse operations. Two design calls worth keeping. Everything the review UI touches is expressed in take seconds, never timeline seconds — a flag stamped at capture, a pause candidate found afterwards and a waveform column all line up under every later edit, and the ripple stays an implementation detail of one relayout function. And the one-button tap/double-tap flag from the plan was dropped for two buttons plus F and R: a double-tap cannot resolve until its window expires, so the mark lands late, and a second tap that misses the window silently becomes two marks — in the one moment of a session where you have no attention to check. One decode per take now feeds peaks, pause candidates, speech onsets and a loudness reading, and the samples stay in memory so publish does not decode a second time. Watch the bundler: a lowercase `select` token anywhere in a source file makes Tailwind emit daisyUI's whole .select component, 8.5 kB of CSS for an event name."
 
 [[feature]]
-name = "Cue track — music, sounds, ambient"
-start = 2026-10-05
-original = 2026-10-26
-delivered = 2026-10-05
-learning = "The bed engine is a seeded pure function of the absolute sample index — render(bed, seed, startSample, count, out) — not a Web Audio graph, because only a function is position-addressable: a window taken from the middle of the stream is bit-identical to the same slice of a full render, which the /ambient page (cut) can no longer shake bugs out of, so the windowed-equality property is asserted directly like renderChain's. White noise is a stateless hash of index; every stateful part (pink/brown integrators, biquads, the wind cutoff walk) replays forward from 0 each call, which is O(startSample) and exactly right because a bed clip renders once in a forward pass. Mix is two stages, one sum: the chain runs over SPEECH ONLY, then cues are summed after and a final brick-wall limiter guards the ceiling — running the expander over music stops it gating room tone and the compressor pumps the bed against the voice. Ducking is offline, driven by the same detectSilences the derush pass already ran (300 ms attack, 800 ms release), so the bed is already down before the first syllable and it cost nothing. Bitrate now reacts to a content tier (speech 64 / occasional-cue 96 / music-heavy 128 kbps), a room-tone fill excluded from the tier since it is an inaudible floor. CC-BY stays out by construction: built-in beds are procedural and carry no licence, imported files are the user's own, and the app builds no attribution machinery because a WebM blob has nowhere to carry it. The daisyUI-token trap bit again and wider than slice 4 knew: the word 'dropdown' in a *comment* emitted the whole .dropdown component (2.6 kB) — Tailwind scans comments too, so watch the CSS after any component. Chapters closed as a snap target the cue track wanted anyway. Code-complete with all build gates green; live-mic/browser verification still pending, the same gate slices 4 and 5 left open."
-
-[[feature]]
 name = "Music slots — an open-licence library"
 start = 2026-10-12
 original = 2026-10-12
@@ -101,10 +94,18 @@ delivered = 2026-10-12
 learning = "The cue track's authoring model was wrong and the sound sources were the wrong sound: an author wants \"something calm under the intro\", not a clip at a snap target, and procedural beds are filtered noise, never music. Slots replaced both, and the cue track survives only as a projection of them — cueClipsFromSlots derives clips on every read, so a slot's length lives in one place and there is no stale clip to keep in sync. Looping fell out of that for free: a short track under a long slot projects to repeated clips with a 0.5 s crossfade at each seam, which the assembler already knew how to mix. Openverse needs no API key because its anonymous limit (20/min, 200/day) is counted per client IP, so each author spends their own budget and no secret ships in the bundle. Two of its three audio providers are usable and the third is the one that hurts: Jamendo is the actual music catalogue, and its storage host pins access-control-allow-origin to an unrelated origin, so the browser cannot read the samples a mix needs — excluded in the query rather than filtered from the results. Licences are CC0 and CC-BY only; CC-BY-SA would push its terms onto the whole episode. Attribution now exists where it said it never would: the recording lexicon gained a credits array, and the markdown link comes back with credit lines under it. CC0 publishes nothing, because CC0 asks for nothing."
 
 [[feature]]
+name = "Render off the main thread"
+start = 2026-10-19
+original = 2026-10-19
+delivered = 2026-10-19
+learning = "renderSession stayed the pure, tested core — the move was a thin renderSessionInWorker wrapper that runs it in a module Worker (a 7 kB chunk, only the DSP graph, no Vue or atproto). The PCM maps are copied in, not transferred, because the main thread still owns those buffers for playback; only the finished samples transfer back out. A synchronous fallback covers jsdom under test and any browser without module Workers, and it also catches a failed spawn or a thrown render, so a publish never dies on a Worker quirk — same bytes either way, the Worker is a latency win and never a behaviour change. Only the single publish call site changed; the pure render kept every existing test."
+
+[[feature]]
 name = "Appview indexes recordings"
 start = 2026-10-19
 original = 2026-11-02
-note = "remanso-jetstream repo. wantedCollections is notes-only today, so nobody can discover anyone else's recordings until this lands."
+delivered = 2026-10-19
+learning = "Landed in remanso-jetstream: wantedCollections gained space.remanso.recording next to the note, with onCreate/onUpdate/onDelete handlers feeding a recording table indexed by did. No discoverable column — a note can opt out of discovery but every recording is public, so the row is simpler than the note's. GET /recordings and GET /:did/recordings are unauthenticated and unfiltered, and a backfill script sweeps records that predate the subscription. Live at api.remanso.space and already returning indexed recordings; the /listen public tier is the only consumer still to come."
 
 [[feature]]
 name = "Recordings browser — /listen"

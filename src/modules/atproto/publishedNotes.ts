@@ -124,11 +124,13 @@ export const listPublishedNotes = async ({
   const session = await getActiveSession(did)
   if (!session) return { ok: false, reason: "no-session" }
 
+  // No `reverse`: the PDS orders listRecords by rkey descending by default, and rkeys are
+  // TIDs, so the default already reads newest first. Asking for reverse=true walks the repo
+  // from its oldest note, which on a prolific author never reaches the one just published.
   const query = new URLSearchParams({
     repo: did,
     collection: NOTE_COLLECTION,
     limit: String(limit),
-    reverse: "true", // newest first
   })
   if (cursor) query.set("cursor", cursor)
 
