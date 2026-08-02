@@ -181,12 +181,11 @@ Two things from it that bear on remanso.at:
 - **Rotate the Gitea PAT.** It was exposed in cleartext in the session transcript that produced
   slice 0. https://git.apoena.dev/user/settings/applications, then update
   `~/.dotfiles/zsh/private.zsh`.
-- **The macroplan block has not been pasted into the app.** The Chrome extension was not connected,
-  so browser automation was unavailable. Either paste the block from `README.md` into the editor at
-  https://macroplan.apoena.dev, or run this in DevTools on that origin and reload:
-  `localStorage.setItem('macroplan:source', <the toml string>)` — the app migrates
-  `macroplan:source` into a plan in `macroplan:library`, whose shape is
-  `{version:1, activeId, plans:[{id, name, source}]}`.
+- **The macroplan lives in `README.md` and that is its home.** It is not meant to be loaded into
+  https://macroplan.apoena.dev; the fenced `macroplan` block in the README is the artefact. Keep
+  it valid when slices move: every feature needs `name`/`start`/`original`, a `delivered` feature
+  carries `learning` instead of `status`/`note`, every `requires` must match a feature name exactly,
+  and `start`/`end` must enclose every week.
 
 Nothing else. The push-to-deploy loop is verified: commit `6bbff99` triggered a deployment through
 the Gitea webhook with no manual step, and it reached `finished`.
