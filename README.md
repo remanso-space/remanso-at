@@ -111,7 +111,8 @@ learning = "Landed in remanso-jetstream: wantedCollections gained space.remanso.
 name = "Recordings browser — /listen"
 start = 2026-10-26
 original = 2026-11-09
-note = "Own recordings work from listRecords with no appview; the public tier needs the row above."
+delivered = 2026-10-26
+learning = "resolveActor maps a handle or DID to its PDS endpoint and listRecordings pulls a repo's recordings plus the notes that name them, straight off the PDS with listRecords — public and per-author, no appview in between, so an author sees their own cuts the moment the studio publishes. ListenView renders that. The everyone's-recordings discovery tier the appview now feeds is a later graft: ListenView names an actor today and does not yet read api.remanso.space/recordings. Dropped a stray reverse=true in listPublishedNotes along the way — listRecords already orders by TID descending, so it had been walking from the oldest note."
 
 [[milestone]]
 name = "Live at remanso.at"
