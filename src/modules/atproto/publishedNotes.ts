@@ -1,4 +1,5 @@
 import { getActiveSession } from "./service/atprotoOAuth"
+import { parseAtUri } from "./parseAtUri"
 import type { PublicNoteRecord } from "./publicNote.types"
 import { RECORDING_COLLECTION } from "./recording.types"
 
@@ -38,6 +39,8 @@ export const recordingMarkdownLink = (atUri: string, title: string): string =>
 export interface PublishedNote {
   record: PublicNoteRecord
   recordingUris: string[]
+  /** A recording sits at this note's own rkey — the attached model, no content scan involved. */
+  attached: boolean
   hasAudio: boolean
 }
 
@@ -62,8 +65,56 @@ const describeFailure = async (res: Response): Promise<string> => {
 }
 
 /**
- * List the signed-in user's published notes, newest first, each annotated with the
- * recordings its content already embeds. Cursor-paginated like the PDS itself.
+ * Every rkey the recording collection holds, which is how a note learns it already has
+ * audio attached: a recording at rkey R is the recording of the note at rkey R.
+ *
+ * One listRecords per page for the whole repo rather than a getRecord per note. The whole
+ * collection is walked, not just the first page: an rkey missing from this set reads as
+ * "no audio yet", so a truncated set would skip the replace warning on exactly the notes
+ * a prolific author records against most.
+ *
+ * An empty set on failure, never a throw: the recordings are an annotation on the note
+ * list, and losing the audio markers is not a reason to leave the user with no notes to
+ * pick from. A partial walk keeps the pages it already has — half the markers beat none.
+ */
+export const listRecordingRkeys = async (did: string): Promise<Set<string>> => {
+  const session = await getActiveSession(did)
+  if (!session) return new Set()
+
+  const rkeys = new Set<string>()
+  let cursor: string | undefined
+
+  try {
+    do {
+      const query = new URLSearchParams({
+        repo: did,
+        collection: RECORDING_COLLECTION,
+        limit: "100",
+      })
+      if (cursor) query.set("cursor", cursor)
+
+      const res = await session.fetchHandler(`/xrpc/com.atproto.repo.listRecords?${query}`, {
+        method: "GET",
+      })
+      if (!res.ok) return rkeys
+
+      const body = (await res.json()) as { records: { uri: string }[]; cursor?: string }
+      for (const record of body.records) rkeys.add(parseAtUri(record.uri).rkey)
+      // A cursor with no records means the collection is exhausted; some PDS
+      // implementations still hand one back, and following it would never end.
+      cursor = body.records.length ? body.cursor : undefined
+    } while (cursor)
+
+    return rkeys
+  } catch {
+    return rkeys
+  }
+}
+
+/**
+ * List the signed-in user's published notes, newest first, each annotated with the audio
+ * it carries — attached at its own rkey, or embedded in its content by the legacy paste.
+ * Cursor-paginated like the PDS itself.
  */
 export const listPublishedNotes = async ({
   did,
@@ -88,9 +139,11 @@ export const listPublishedNotes = async ({
     if (!res.ok) return { ok: false, reason: "list-failed", detail: await describeFailure(res) }
 
     const body = (await res.json()) as { records: PublicNoteRecord[]; cursor?: string }
+    const recordingRkeys = await listRecordingRkeys(did)
     const notes = body.records.map((record) => {
       const recordingUris = noteRecordingUris(record.value.content)
-      return { record, recordingUris, hasAudio: recordingUris.length > 0 }
+      const attached = recordingRkeys.has(parseAtUri(record.uri).rkey)
+      return { record, recordingUris, attached, hasAudio: attached || recordingUris.length > 0 }
     })
     return { ok: true, notes, cursor: body.cursor }
   } catch (error) {

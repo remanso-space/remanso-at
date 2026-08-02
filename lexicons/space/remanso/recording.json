@@ -4,7 +4,7 @@
   "defs": {
     "main": {
       "type": "record",
-      "description": "An audio recording — a past stream, a podcast episode, a voice note — referenced from a Remanso note by at-uri.",
+      "description": "An audio recording — a past stream, a podcast episode, a voice note. A recording at rkey R is the recording of the space.remanso.note at rkey R in the same repo: one note, at most one recording, paired by convention rather than by a field, so a reader that knows the note's did and rkey reaches the audio with a single getRecord. A recording whose rkey matches no note stands alone and belongs to nobody. Legacy path: a recording is also referenced from a note by at-uri embedded in the note's content.",
       "key": "tid",
       "record": {
         "type": "object",

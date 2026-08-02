@@ -5,11 +5,13 @@ import CueTrackPanel from "../components/studio/CueTrackPanel.vue"
 import DerushPanel from "../components/studio/DerushPanel.vue"
 import { useSession } from "../composables/useSession"
 import { useTakeRecorder } from "../composables/useTakeRecorder"
+import { parseAtUri } from "../modules/atproto/parseAtUri"
 import {
   listPublishedNotes,
   recordingAltFor,
   type PublishedNote,
 } from "../modules/atproto/publishedNotes"
+import { toShortDid } from "../modules/atproto/shortDid"
 import type { TakePcm } from "../modules/studio/assemble"
 import { analyzeTakeFile, type TakeAnalysis } from "../modules/studio/analyzeTake"
 import { addTake, newSession, timelineDurationSec } from "../modules/studio/edl"
@@ -57,6 +59,10 @@ const link = ref("")
 const publishError = ref<string | null>(null)
 const copied = ref(false)
 
+// What this cut attached itself to, snapshotted at publish. The note list stays live
+// underneath, and picking another note afterwards must not rewrite the confirmation.
+const attachedTo = ref<{ title: string; url: string } | null>(null)
+
 const hasProgramme = computed(() => timelineDurationSec(session.value) > 0)
 
 const loadNotes = async () => {
@@ -84,9 +90,13 @@ watch(isLoggedIn, (yes) => {
 // The title field sits far above the note list, so a pick has to report itself down here:
 // the row stays marked and the confirmation line names what the title became.
 const pickedUri = ref("")
-const pickedTitle = computed(
-  () => notes.value.find((n) => n.record.uri === pickedUri.value)?.record.value.title ?? "",
-)
+const pickedNote = computed(() => notes.value.find((n) => n.record.uri === pickedUri.value))
+const pickedTitle = computed(() => pickedNote.value?.record.value.title ?? "")
+
+// remanso.space routes a public note at /pub/:shortDid/:rkey/:slug? — the slug is
+// decorative, so the two-segment form is enough to land on the note.
+const noteUrl = (did: string, rkey: string) =>
+  `https://remanso.space/pub/${toShortDid(did)}/${rkey}`
 
 const pickNote = (note: PublishedNote) => {
   title.value = note.record.value.title
@@ -96,6 +106,7 @@ const pickNote = (note: PublishedNote) => {
 const startRecording = async () => {
   publishState.value = "idle"
   link.value = ""
+  attachedTo.value = null
   takeWarning.value = null
   await recorder.start()
 }
@@ -143,6 +154,7 @@ const resetSession = async () => {
   selectedTakeId.value = ""
   publishState.value = "idle"
   link.value = ""
+  attachedTo.value = null
   takeWarning.value = null
 }
 
@@ -151,6 +163,20 @@ const publish = async () => {
   // Guard against a double publish: only from idle or after a prior error, never re-run
   // while publishing or once already done (that would create a duplicate recording).
   if (publishState.value === "publishing" || publishState.value === "done") return
+
+  const note = pickedNote.value
+  const noteRkey = note ? parseAtUri(note.record.uri).rkey : undefined
+  // Attaching is a put at the note's rkey, so it silently replaces whatever recording is
+  // already there. That is the wanted behaviour for a second cut, and a surprise otherwise.
+  if (
+    note?.attached &&
+    !window.confirm(
+      `“${note.record.value.title}” already has a recording. Publishing replaces it. Continue?`,
+    )
+  ) {
+    return
+  }
+
   publishState.value = "publishing"
   publishError.value = null
   const result = await publishSession({
@@ -158,10 +184,18 @@ const publish = async () => {
     session: session.value,
     title: title.value || "Untitled",
     takePcm,
+    noteRkey,
   })
   if (result.ok) {
-    link.value = result.link
+    link.value = result.link ?? ""
+    attachedTo.value =
+      note && noteRkey
+        ? { title: note.record.value.title, url: noteUrl(did.value, noteRkey) }
+        : null
     publishState.value = "done"
+    // The row's ♪ marker is now wrong for the note we just wrote to; refetch so a later
+    // publish onto it warns about replacing this cut.
+    if (note) void loadNotes()
   } else {
     publishError.value = result.error
     publishState.value = "error"
@@ -304,17 +338,31 @@ const copyLink = async () => {
               <p v-if="publishState === 'error'" class="error">{{ publishError }}</p>
             </template>
 
-            <!-- Published: this cut is spent. Offer the link and a fresh session, never a
-                 second publish of the same audio. -->
+            <!-- Published: this cut is spent. Offer a fresh session, never a second publish
+                 of the same audio. Attached to a note, the recording is already where it
+                 belongs; with no note picked there is still a link to paste. -->
             <div v-else class="published">
-              <p class="mono done-label">Published. Paste this into your note:</p>
-              <textarea class="link-box mono" readonly :value="link" rows="2" />
-              <div class="review-actions">
-                <button class="btn primary" @click="copyLink">
-                  {{ copied ? "Copied ✓" : "Copy link" }}
-                </button>
-                <button class="btn" @click="resetSession">Start a new recording</button>
-              </div>
+              <template v-if="attachedTo">
+                <p class="mono done-label">Published.</p>
+                <p class="attached-line">
+                  Attached to
+                  <a :href="attachedTo.url" target="_blank" rel="noopener">{{ attachedTo.title }}</a
+                  >.
+                </p>
+                <div class="review-actions">
+                  <button class="btn primary" @click="resetSession">Start a new recording</button>
+                </div>
+              </template>
+              <template v-else>
+                <p class="mono done-label">Published. Paste this into your note:</p>
+                <textarea class="link-box mono" readonly :value="link" rows="2" />
+                <div class="review-actions">
+                  <button class="btn primary" @click="copyLink">
+                    {{ copied ? "Copied ✓" : "Copy link" }}
+                  </button>
+                  <button class="btn" @click="resetSession">Start a new recording</button>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -360,7 +408,8 @@ const copyLink = async () => {
               Title set to “{{ pickedTitle }}”.
             </p>
             <p class="hint">
-              Picking a note prefills the title; the link pastes as {{ recordingAltFor("title") }}.
+              Picking a note prefills the title and attaches the recording to that note. With no
+              note picked you get {{ recordingAltFor("title") }} to paste instead.
             </p>
           </div>
         </template>
@@ -531,6 +580,13 @@ const copyLink = async () => {
   color: var(--hw-ink-faint);
   font-size: 0.8rem;
   margin: 0 0 0.4rem;
+}
+.attached-line {
+  margin: 0 0 1rem;
+  color: var(--hw-ink-soft);
+}
+.attached-line a {
+  color: var(--hw-pink-deep);
 }
 .link-box {
   width: 100%;

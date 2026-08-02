@@ -60,6 +60,72 @@ describe("uploadRecording", () => {
     expect(body.record.createdAt).toEqual(expect.any(String))
   })
 
+  // The shared rkey is the attachment: putRecord at the note's rkey is what makes this
+  // audio the recording of that note, and replacing an earlier cut is the point.
+  it("puts the record at the note's rkey when one is given", async () => {
+    const fetchHandler = vi
+      .fn()
+      .mockResolvedValueOnce(okJson({ blob: blobRef }))
+      .mockResolvedValueOnce(okJson({ uri: "at://did:plc:abc/space.remanso.recording/note1" }))
+    vi.mocked(getActiveSession).mockResolvedValue({ fetchHandler } as never)
+
+    expect(
+      await uploadRecording({
+        did: "did:plc:abc",
+        file: makeFile(),
+        title: "Ep 1",
+        rkey: "note1",
+      }),
+    ).toEqual({ ok: true, uri: "at://did:plc:abc/space.remanso.recording/note1" })
+
+    const [path, init] = fetchHandler.mock.calls[1]
+    expect(path).toBe("/xrpc/com.atproto.repo.putRecord")
+    const body = JSON.parse(init.body)
+    expect(body.rkey).toBe("note1")
+    expect(body.repo).toBe("did:plc:abc")
+    expect(body.collection).toBe("space.remanso.recording")
+    expect(body.record.audio).toEqual(blobRef)
+  })
+
+  it("creates the record with no rkey when no note was picked", async () => {
+    const fetchHandler = vi
+      .fn()
+      .mockResolvedValueOnce(okJson({ blob: blobRef }))
+      .mockResolvedValueOnce(okJson({ uri: "at://did:plc:abc/space.remanso.recording/3xyz" }))
+    vi.mocked(getActiveSession).mockResolvedValue({ fetchHandler } as never)
+
+    await uploadRecording({ did: "did:plc:abc", file: makeFile(), title: "Ep 1" })
+
+    const [path, init] = fetchHandler.mock.calls[1]
+    expect(path).toBe("/xrpc/com.atproto.repo.createRecord")
+    expect(JSON.parse(init.body)).not.toHaveProperty("rkey")
+  })
+
+  it("keeps the XRPC failure detail when putRecord fails", async () => {
+    const fetchHandler = vi
+      .fn()
+      .mockResolvedValueOnce(okJson({ blob: blobRef }))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: "InvalidSwap", message: "record changed" }),
+      } as unknown as Response)
+    vi.mocked(getActiveSession).mockResolvedValue({ fetchHandler } as never)
+
+    expect(
+      await uploadRecording({
+        did: "did:plc:abc",
+        file: makeFile(),
+        title: "t",
+        rkey: "note1",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "record-failed",
+      detail: "400 InvalidSwap: record changed",
+    })
+  })
+
   it("uploads with an explicit mimeType when the file carries none", async () => {
     const fetchHandler = vi
       .fn()

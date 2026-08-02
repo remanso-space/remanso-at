@@ -9,10 +9,13 @@ import { analyzeTakeFile } from "./analyzeTake"
 import { readTakeFile } from "./opfsTakes"
 import { readCueFile } from "./opfsCues"
 
-// The end of the line: render whatever the EDL currently says, encode it to Opus,
-// uploadBlob + createRecord, and hand back the copyable markdown link. Never writes a
-// note — the link goes through git via the existing Action (plan: the studio's
-// deliverable is a link).
+// The end of the line: render whatever the EDL currently says, encode it to Opus, and
+// write it to the PDS. With a `noteRkey` the deliverable is the record itself, put at the
+// note's own rkey — the note gains its audio without a single byte of the note changing,
+// so there is nothing to paste and `link` comes back null. Without one there is no note to
+// attach to, and the deliverable falls back to the copyable markdown link the author pastes
+// into a `.pub.md`. Never writes a note either way — the note goes through git via the
+// existing Action.
 //
 // Slice 5 moved the editing decisions *out* of here. Pause removal used to be a boolean
 // on this call; it is now clip edits the review pass has already made, so publish has no
@@ -27,10 +30,19 @@ export interface PublishParams {
   title: string
   /** Samples already decoded by the review pass, by take id — anything missing is decoded here. */
   takePcm?: TakePcm
+  /** The rkey of the note being recorded against; the recording is written there. */
+  noteRkey?: string
 }
 
 export type PublishResult =
-  | { ok: true; link: string; uri: string; durationSec: number; measuredLufs: number | null }
+  | {
+      ok: true
+      /** The markdown to paste, or null when the recording attached itself to a note. */
+      link: string | null
+      uri: string
+      durationSec: number
+      measuredLufs: number | null
+    }
   | { ok: false; error: string }
 
 /** Takes the timeline still plays. A take that every edit rejected need not be decoded. */
@@ -58,6 +70,7 @@ export const publishSession = async ({
   session,
   title,
   takePcm = {},
+  noteRkey,
 }: PublishParams): Promise<PublishResult> => {
   if (timelineDurationSec(session) <= 0) {
     return { ok: false, error: "There is nothing to publish — every region is rejected or muted." }
@@ -107,6 +120,7 @@ export const publishSession = async ({
     title,
     durationSec: Math.round(rendered.durationSec),
     mimeType: encoded.mimeType,
+    rkey: noteRkey,
   })
 
   if (!result.ok) {
@@ -116,7 +130,7 @@ export const publishSession = async ({
 
   return {
     ok: true,
-    link: recordingMarkdownLink(result.uri, title),
+    link: noteRkey ? null : recordingMarkdownLink(result.uri, title),
     uri: result.uri,
     durationSec: rendered.durationSec,
     measuredLufs: rendered.measuredLufs,
