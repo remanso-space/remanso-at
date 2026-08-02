@@ -30,7 +30,7 @@ I had reached for the editorial left-accent bar (`border: 1px solid var(--hw-rul
 3px solid var(--hw-pink)`) on the update toast and on `.page-note.danger`. It reads as a stylistic
 tic here, not as the brand.
 
-**How to apply:** in this project, an accented box gets its accent on the *whole* border —
+**How to apply:** in this project, an accented box gets its accent on the _whole_ border —
 `border: 2px solid var(--hw-pink)`, or `border-color:` overriding a neutral base. Do not introduce
 `border-left`/`border-inline-start` accent bars.
 
