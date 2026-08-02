@@ -78,7 +78,9 @@ Handover: `docs/handover/slice-7-music-slots.md`.
 
 ## Carried forward (slice 8+)
 
-- [ ] Move the render to a Worker (still synchronous).
+- [x] Move the render to a Worker. `renderSessionInWorker` runs the pure `renderSession` in
+      `renderWorker.ts` (module Worker, 7 kB chunk), copies PCM in, transfers samples out;
+      synchronous fallback for jsdom / no-module-Worker. Only publish call site changed. 286 tests.
 - [ ] Recover-session reconcile-on-open banner (`listTakePaths`/`listCuePaths` + `checkQuota`).
 - [ ] EDL persistence in IndexedDB behind a comlink Worker.
 - [ ] Trim inside a slot: `MusicSlot.inSec` exists and only the fill path writes it.

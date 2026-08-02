@@ -28,7 +28,7 @@ placing them, and chapter markers.
    chain over the SPEECH ONLY, then sums the cues, then a final brick-wall limiter guards the
    ceiling. A session with no cues renders byte-for-byte as it did before slice 6.
 4. **Per-cue duck and fades** — `duck.ts`. `duck: "under-speech"` multiplies the cue by an
-   envelope driven by the *offline* speech (300 ms attack, 800 ms release), built from the
+   envelope driven by the _offline_ speech (300 ms attack, 800 ms release), built from the
    same `detectSilences` the review pass already ran. Fades default to 2 s in / 4 s out for a
    long bed and ~30 ms for a short sting (`defaultFades`).
 5. **A snap index** — `snap.ts`, `snapPoints`/`snapToNearest` over clip boundaries, flags,
@@ -100,7 +100,7 @@ proving the buttons and the `C` key reach the right pure function.
 
 **Not yet verified — the live-browser gate:**
 
-- Every bed *heard*, not just measured — that rain sounds like rain and wind like wind, and
+- Every bed _heard_, not just measured — that rain sounds like rain and wind like wind, and
   that the seeds pick pleasant instances. The spectral tests prove the filters, not the taste.
 - The two-stage mix on a real render: the bed sitting 12–16 LU under the voice, the duck
   breathing under real speech, the final limiter not audibly pumping on a music-heavy episode.
@@ -112,7 +112,7 @@ proving the buttons and the `C` key reach the right pure function.
 
 ## Gotchas
 
-- **A daisyUI component leaks from a word in a *comment*, not just a class or event.** The word
+- **A daisyUI component leaks from a word in a _comment_, not just a class or event.** The word
   `dropdown` in a `CueTrackPanel` comment emitted the whole `.dropdown` component — 2.6 kB —
   because Tailwind scans comments too. Same class as the `select` bug (slice 4) and the
   markdown-scan bug at the top of `src/style.css`, but wider: **watch the CSS bundle after

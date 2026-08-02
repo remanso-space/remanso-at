@@ -1,6 +1,7 @@
 import { recordingMarkdownLink } from "../atproto/publishedNotes"
 import { uploadRecording } from "../atproto/uploadRecording"
-import { renderSession, type CuePcm, type TakePcm } from "./assemble"
+import type { CuePcm, TakePcm } from "./assemble"
+import { renderSessionInWorker } from "./renderInWorker"
 import { speechTrack } from "./edl"
 import type { MusicCredit, Session } from "./edl.types"
 import { SESSION_SAMPLE_RATE } from "./edl.types"
@@ -108,7 +109,7 @@ export const publishSession = async ({
     cuePcm[path] = decoded.samples
   }
 
-  const rendered = renderSession(session, pcm, SESSION_SAMPLE_RATE, cuePcm)
+  const rendered = await renderSessionInWorker(session, pcm, SESSION_SAMPLE_RATE, cuePcm)
   if (rendered.samples.length === 0) {
     return { ok: false, error: "The render came out empty." }
   }

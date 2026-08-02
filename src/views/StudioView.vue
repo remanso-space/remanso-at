@@ -657,9 +657,12 @@ const copyLink = async () => {
   color: var(--link-accent);
   font-size: 0.9rem;
 }
-/* ink-faint is a ~2.6:1 grey — legible as a rule, not as a glyph that carries meaning. */
+/* The "no audio" dash must read in both the light theme and a browser-forced dark mode
+   (Dark Reader / Chrome auto-dark). Mid-greys like ink-soft/ink-faint invert to mid-greys
+   and collapse to ~2:1 on the inverted-dark row. Full ink is an extreme luminance, so it
+   inverts to a near-white that stays legible either way. */
 .badge-mute {
-  color: var(--hw-ink-soft);
+  color: var(--hw-ink);
 }
 .picked-line {
   font-size: 0.8rem;
