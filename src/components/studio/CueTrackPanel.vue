@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, onBeforeUnmount, ref } from "vue"
 
 import type { TakeAnalysis } from "../../modules/studio/analyzeTake"
-import { BED_IDS } from "../../modules/studio/beds"
+import { BED_IDS, renderBed } from "../../modules/studio/beds"
 import { audioMimeType, cueExtension } from "../../modules/studio/cueImport"
 import {
   addBedClip,
@@ -42,6 +42,63 @@ const bed = ref<BedId>("rain")
 const placeAtSec = ref(0)
 const importError = ref<string | null>(null)
 const importing = ref(false)
+
+// Auditioning the selected bed. Beds carry no live playback anywhere else — they are
+// procedural and only rendered at publish — so this is the one place you hear one before
+// committing it. Render a few seconds off `renderBed` (the same pure function the assembler
+// uses, so the preview is bit-identical to the real thing) into an AudioBuffer and play it.
+const PREVIEW_SEC = 6
+const PREVIEW_SR = 48_000
+const auditioning = ref(false)
+let audioCtx: AudioContext | null = null
+let previewSource: AudioBufferSourceNode | null = null
+
+const stopPreview = () => {
+  if (previewSource) {
+    previewSource.onended = null
+    try {
+      previewSource.stop()
+    } catch {
+      // already stopped
+    }
+    previewSource.disconnect()
+    previewSource = null
+  }
+  auditioning.value = false
+}
+
+const tryBed = async () => {
+  if (auditioning.value) {
+    stopPreview()
+    return
+  }
+  const Ctx =
+    window.AudioContext ?? (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!Ctx) return
+  audioCtx ??= new Ctx()
+  await audioCtx.resume()
+
+  const count = PREVIEW_SEC * PREVIEW_SR
+  const buffer = audioCtx.createBuffer(1, count, PREVIEW_SR)
+  // A fresh seed each press, so re-auditioning the same bed does not sound canned.
+  renderBed(bed.value, Date.now() % 1_000_000, 0, count, buffer.getChannelData(0), PREVIEW_SR)
+
+  const source = audioCtx.createBufferSource()
+  source.buffer = buffer
+  // Beds sit low under speech; audition at a matching level rather than full scale.
+  const gain = audioCtx.createGain()
+  gain.gain.value = 0.6
+  source.connect(gain).connect(audioCtx.destination)
+  source.onended = () => stopPreview()
+  previewSource = source
+  auditioning.value = true
+  source.start()
+}
+
+onBeforeUnmount(() => {
+  stopPreview()
+  void audioCtx?.close()
+})
 let counter = 0
 const nextId = () => `cue-${Date.now()}-${(counter += 1)}`
 
@@ -173,6 +230,9 @@ const clipLabel = (source: Session["tracks"][number]["clips"][number]["source"])
       <select v-model="bed" class="picker" aria-label="Bed">
         <option v-for="b in BED_IDS" :key="b" :value="b">{{ b }}</option>
       </select>
+      <button class="btn" data-test="try-bed" @click="tryBed">
+        {{ auditioning ? "Stop ▪" : "Try ▸" }}
+      </button>
       <button class="btn" data-test="add-bed" @click="addBed">Add bed</button>
 
       <label class="btn file-btn">
