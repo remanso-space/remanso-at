@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { addBedClip, addCueFileClip, addRoomToneFill, addTake, newSession } from "./edl"
-import type { Session, Take } from "./edl.types"
+import { addTake, newSession } from "./edl"
+import type { MusicPick, Session, Take } from "./edl.types"
 import { bitrateFor, contentTier, minutesAtTier } from "./mediaCodec"
+import { addSlot, newSlot, updateSlot } from "./musicSlots"
 
 // Only the pure arithmetic is tested here; decode/encode are WebCodecs and verified in the
 // app.
@@ -18,6 +19,25 @@ const take = (id: string, durationSec: number): Take => ({
 
 const withTake = (durationSec: number): Session =>
   addTake(newSession("s", "e"), take("t1", durationSec), "c1")
+
+const pick = (sourceDurationSec: number): MusicPick => ({
+  opfsPath: "cues/x.mp3",
+  sourceDurationSec,
+  credit: {
+    title: "Pad",
+    creator: "someone",
+    license: "cc0",
+    licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    sourceUrl: "https://freesound.org/x",
+  },
+})
+
+/** A filled slot of `lengthSec`, anchored at the start of a `programmeSec`-long take. */
+const withSlot = (programmeSec: number, lengthSec: number): Session => {
+  const slot = newSlot("intro", "s1")
+  const s = addSlot(withTake(programmeSec), slot)
+  return updateSlot(s, slot.id, { lengthSec, pick: pick(300) })
+}
 
 describe("bitrateFor", () => {
   it("prefers the tier target for a short episode", () => {
@@ -48,26 +68,20 @@ describe("minutesAtTier", () => {
 })
 
 describe("contentTier", () => {
-  it("is speech-only with no cues", () => {
+  it("is speech-only with no music", () => {
     expect(contentTier(withTake(60))).toBe("speech")
   })
 
-  it("is occasional-cue for a short sting under a long episode", () => {
-    const s = addCueFileClip(
-      withTake(120),
-      { opfsPath: "cues/x.mp3", atSec: 10, durationSec: 2 },
-      "q1",
-    )
-    expect(contentTier(s)).toBe("occasional-cue")
+  it("is occasional-cue for a short intro under a long episode", () => {
+    expect(contentTier(withSlot(120, 2))).toBe("occasional-cue")
   })
 
-  it("is music-heavy for a bed under most of the programme", () => {
-    const s = addBedClip(withTake(60), { bedId: "rain", seed: 1, atSec: 0, lengthSec: 55 }, "q1")
-    expect(contentTier(s)).toBe("music-heavy")
+  it("is music-heavy for music under most of the programme", () => {
+    expect(contentTier(withSlot(60, 55))).toBe("music-heavy")
   })
 
-  it("ignores a room-tone fill: it is a floor, not music", () => {
-    const s = addRoomToneFill(withTake(60), 1, "q1")
+  it("ignores a slot nobody filled", () => {
+    const s = addSlot(withTake(60), newSlot("intro", "s1"))
     expect(contentTier(s)).toBe("speech")
   })
 })

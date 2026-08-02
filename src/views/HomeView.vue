@@ -48,7 +48,7 @@ import { RouterLink } from "vue-router"
         <p class="room-copy">
           Record a take from your microphone, or bring a file you recorded elsewhere. Trim the ends,
           drop the long pauses, and set the loudness once so it plays at the level a podcast should.
-          Mix in a sting or a bed of river sound where it belongs. When it sounds right, publish a
+          Put music under the intro, the breaks, the ending. When it sounds right, publish a
           <code class="mono">space.remanso.recording</code> to your PDS and copy the link. Paste it
           into a note and the audio plays where the note is read.
         </p>
@@ -108,9 +108,8 @@ import { RouterLink } from "vue-router"
             <h3>Cut and mix</h3>
             <p>
               Trim the ends, take out the dead air, level the whole thing to
-              <code class="mono">-16 LUFS</code>. Add music or a bed of ambient sound where a
-              segment needs it. Every edit points back at the original take, and every edit can be
-              undone.
+              <code class="mono">-16 LUFS</code>. Put openly licensed music where a segment needs
+              it. Every edit points back at the original take, and every edit can be undone.
             </p>
           </div>
         </li>

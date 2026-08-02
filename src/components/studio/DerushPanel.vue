@@ -20,7 +20,7 @@ import {
   addChapter,
   projectChapterToTimeline,
   removeChapter,
-  timelineDurationSec,
+  speechDurationSec,
 } from "../../modules/studio/edl"
 import type { Session, Take } from "../../modules/studio/edl.types"
 import { readTakeFile } from "../../modules/studio/opfsTakes"
@@ -72,7 +72,7 @@ const retakes = computed(() =>
 const hasRegion = computed(
   () => inSec.value !== null && outSec.value !== null && outSec.value > inSec.value,
 )
-const programmeSec = computed(() => timelineDurationSec(props.session))
+const programmeSec = computed(() => speechDurationSec(props.session))
 
 const revokeUrl = () => {
   if (takeUrl.value) URL.revokeObjectURL(takeUrl.value)

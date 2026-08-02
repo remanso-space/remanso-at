@@ -1,23 +1,16 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  addBedClip,
   addChapter,
-  addCueFileClip,
-  addRoomToneFill,
   addTake,
   clipDurationSec,
-  cueTrack,
-  DEFAULT_BED_GAIN_DB,
   DEFAULT_CHAIN,
-  defaultFades,
-  hasCueClips,
   newSession,
   projectChapterToTimeline,
   removeChapter,
+  speechDurationSec,
   speechTrack,
   splitClipAt,
-  timelineDurationSec,
   trimClip,
 } from "./edl"
 import type { Take } from "./edl.types"
@@ -32,14 +25,15 @@ const take = (id: string, durationSec: number): Take => ({
 })
 
 describe("newSession", () => {
-  it("starts with an empty speech and cue track and the default chain", () => {
+  it("starts with an empty speech track, no music slots and the default chain", () => {
     const s = newSession("s1", "Episode 1")
 
-    expect(s.tracks.map((t) => t.kind)).toEqual(["speech", "cue"])
+    expect(s.tracks.map((t) => t.kind)).toEqual(["speech"])
     expect(s.tracks.every((t) => t.clips.length === 0)).toBe(true)
+    expect(s.musicSlots).toEqual([])
     expect(s.chain).toEqual(DEFAULT_CHAIN)
     expect(s.sampleRate).toBe(48_000)
-    expect(timelineDurationSec(s)).toBe(0)
+    expect(speechDurationSec(s)).toBe(0)
   })
 
   it("does not share the chain object with the constant", () => {
@@ -58,7 +52,7 @@ describe("addTake", () => {
     const clips = speechTrack(s).clips
     expect(clips).toHaveLength(1)
     expect(clips[0]).toMatchObject({ id: "c1", inSec: 0, outSec: 60, atSec: 0 })
-    expect(timelineDurationSec(s)).toBe(60)
+    expect(speechDurationSec(s)).toBe(60)
   })
 
   it("lays a second take after the first, not on top of it", () => {
@@ -66,7 +60,7 @@ describe("addTake", () => {
     s = addTake(s, take("t2", 30), "c2")
 
     expect(speechTrack(s).clips.map((c) => c.atSec)).toEqual([0, 60])
-    expect(timelineDurationSec(s)).toBe(90)
+    expect(speechDurationSec(s)).toBe(90)
   })
 
   it("does not mutate the input session", () => {
@@ -182,82 +176,6 @@ describe("projectChapterToTimeline", () => {
     expect(projectChapterToTimeline(s, { takeId: "t1", atTakeSec: 45 })).toBe(25)
     // Take second 5 was in the dropped left clip.
     expect(projectChapterToTimeline(s, { takeId: "t1", atTakeSec: 5 })).toBeNull()
-  })
-})
-
-describe("defaultFades", () => {
-  it("gives a long bed slow opens and closes", () => {
-    expect(defaultFades(60)).toEqual({ fadeInSec: 2, fadeOutSec: 4 })
-  })
-
-  it("keeps a short sting's fades tiny so they do not swallow it", () => {
-    expect(defaultFades(0.5)).toEqual({ fadeInSec: 0.03, fadeOutSec: 0.03 })
-  })
-
-  it("never lets a fade exceed half the clip", () => {
-    const f = defaultFades(0.04)
-    expect(f.fadeInSec).toBeLessThanOrEqual(0.02)
-  })
-})
-
-describe("cue clips", () => {
-  it("addBedClip places a ducked, gain-reduced bed on the cue track", () => {
-    const s = addBedClip(
-      newSession("s", "e"),
-      { bedId: "rain", seed: 7, atSec: 5, lengthSec: 60 },
-      "q1",
-    )
-    const clip = cueTrack(s)!.clips[0]
-
-    expect(clip.source).toEqual({ kind: "bed", bedId: "rain", seed: 7 })
-    expect(clip.atSec).toBe(5)
-    expect(clipDurationSec(clip)).toBe(60)
-    expect(clip.gainDb).toBe(DEFAULT_BED_GAIN_DB)
-    expect(clip.duck).toBe("under-speech")
-    expect(clip.fadeInSec).toBe(2)
-    expect(clip.fadeOutSec).toBe(4)
-    expect(speechTrack(s).clips.length).toBe(0) // never touches the speech track
-  })
-
-  it("addCueFileClip places an un-ducked file cue", () => {
-    const s = addCueFileClip(
-      newSession("s", "e"),
-      { opfsPath: "cues/x.mp3", atSec: 3, durationSec: 2 },
-      "q1",
-    )
-    const clip = cueTrack(s)!.clips[0]
-
-    expect(clip.source).toEqual({ kind: "file", opfsPath: "cues/x.mp3" })
-    expect(clip.duck).toBe("none")
-    expect(clip.gainDb).toBe(0)
-  })
-
-  it("hasCueClips reflects the cue track, ignoring muted clips", () => {
-    const empty = addTake(newSession("s", "e"), take("t1", 10), "c1")
-    expect(hasCueClips(empty)).toBe(false)
-
-    const withBed = addBedClip(empty, { bedId: "wind", seed: 1, atSec: 0, lengthSec: 10 }, "q1")
-    expect(hasCueClips(withBed)).toBe(true)
-
-    const muted = {
-      ...withBed,
-      tracks: withBed.tracks.map((t) =>
-        t.kind === "cue" ? { ...t, clips: t.clips.map((c) => ({ ...c, muted: true })) } : t,
-      ),
-    }
-    expect(hasCueClips(muted)).toBe(false)
-  })
-
-  it("addRoomToneFill spans the current timeline and does nothing to an empty session", () => {
-    const empty = newSession("s", "e")
-    expect(addRoomToneFill(empty, 1, "q1")).toBe(empty)
-
-    const s0 = addTake(newSession("s", "e"), take("t1", 12), "c1")
-    const filled = addRoomToneFill(s0, 1, "q1")
-    const clip = cueTrack(filled)!.clips[0]
-    expect(clip.source).toEqual({ kind: "bed", bedId: "roomTone", seed: 1 })
-    expect(clipDurationSec(clip)).toBe(12)
-    expect(clip.duck).toBe("none")
   })
 })
 

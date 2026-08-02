@@ -1,30 +1,30 @@
 import { dbToAmplitude } from "../../utils/loudness"
-import { renderBedBuffer } from "./beds"
 import { duckEnvelope } from "./duck"
-import { clipDurationSec, cueTrack, hasCueClips, speechTrack, timelineDurationSec } from "./edl"
+import { clipDurationSec, speechTrack } from "./edl"
 import type { Session } from "./edl.types"
+import { cueClipsFromSlots, hasMusic, programmeDurationSec } from "./musicSlots"
 import { createLimiter, renderProgramme, type RenderResult } from "./renderChain"
 
 // The bridge from the EDL to the renderer. Two tracks, two stages, one sum (plan: slice 6):
 //
 //   1. the speech track is laid onto a timeline buffer and run through the whole chain —
 //      HPF, presence, normalise to -16 LUFS, limit to -1 dBFS;
-//   2. the cue track is laid onto a second buffer — beds rendered procedurally, files from
-//      decoded PCM, each clip ducked under the speech envelope and faded;
+//   2. the cue track — projected from the music slots, not stored — is laid onto a second
+//      buffer from decoded PCM, each clip ducked under the speech envelope and faded;
 //   3. the two are summed and a final brick-wall limiter guards the ceiling.
 //
 // The order matters and is not negotiable: the expander and compressor must see speech
-// only. Run over music the expander reads the bed as signal and stops gating room tone,
-// and the compressor pumps the bed against every syllable. So the chain never touches a
-// cue — cues arrive already-mixed and are added to the finished voice.
+// only. Run over music the expander reads the music as signal and stops gating room tone,
+// and the compressor pumps it against every syllable. So the chain never touches a cue —
+// cues arrive already-mixed and are added to the finished voice.
 //
-// Pure: decoded take/file samples come in as maps and beds are a pure function of their
-// clip, so the whole assembly is unit-testable without a decoder or an AudioContext.
+// Pure: decoded take and music samples come in as maps, so the whole assembly is
+// unit-testable without a decoder or an AudioContext.
 
 /** Decoded mono samples per take id, at the session sample rate. */
 export type TakePcm = Record<string, Float32Array>
 
-/** Decoded mono samples per imported cue file, keyed by its OPFS path. */
+/** Decoded mono samples per music track, keyed by its OPFS path. */
 export type CuePcm = Record<string, Float32Array>
 
 const equalPowerIn = (t: number) => Math.sin((t * Math.PI) / 2)
@@ -76,7 +76,7 @@ export const assembleSpeech = (
   takePcm: TakePcm,
   sampleRate: number,
 ): Float32Array => {
-  const out = new Float32Array(Math.round(timelineDurationSec(session) * sampleRate))
+  const out = new Float32Array(Math.round(programmeDurationSec(session) * sampleRate))
   const track = speechTrack(session)
 
   for (const clip of track.clips) {
@@ -104,11 +104,11 @@ export const assembleSpeech = (
 }
 
 /**
- * Sum every non-muted cue clip onto one mono timeline buffer. A `file` cue reads its window
- * from decoded PCM; a `bed` cue is rendered procedurally for exactly the samples it needs,
- * position-addressably, so `inSec` indexes into the infinite bed. A clip with
- * `duck: "under-speech"` is multiplied by `duckEnv` at its timeline position — the bed sits
- * down under the voice and swells in the gaps. Fades are per-clip equal-power.
+ * Sum the cue clips the music slots project onto one mono timeline buffer. Each clip reads
+ * its window from decoded PCM; a clip with `duck: "under-speech"` is multiplied by `duckEnv`
+ * at its timeline position, so the music sits down under the voice and swells in the gaps.
+ * Fades are per-clip equal-power, which is also what makes a looped slot's seams inaudible:
+ * the projection hands over overlapping clips whose fades cross.
  */
 export const assembleCues = (
   session: Session,
@@ -116,44 +116,23 @@ export const assembleCues = (
   duckEnv: Float32Array | null,
   sampleRate: number,
 ): Float32Array => {
-  const out = new Float32Array(Math.round(timelineDurationSec(session) * sampleRate))
-  const track = cueTrack(session)
-  if (!track) return out
+  const out = new Float32Array(Math.round(programmeDurationSec(session) * sampleRate))
 
-  for (const clip of track.clips) {
-    if (clip.muted) continue
+  for (const clip of cueClipsFromSlots(session)) {
+    if (clip.source.kind !== "music") continue
 
     const count = Math.round(clipDurationSec(clip) * sampleRate)
     if (count <= 0) continue
 
-    let src: Float32Array
-    let srcStart: number
-    if (clip.source.kind === "file") {
-      const decoded = cuePcm[clip.source.opfsPath]
-      if (!decoded) continue
-      src = decoded
-      srcStart = Math.round(clip.inSec * sampleRate)
-    } else if (clip.source.kind === "bed") {
-      // Render exactly this clip's window of the bed. inSec is the position into the bed's
-      // infinite stream, so re-rendering the same clip yields the same samples.
-      src = renderBedBuffer(
-        clip.source.bedId,
-        clip.source.seed,
-        Math.round(clip.inSec * sampleRate),
-        count,
-        sampleRate,
-      )
-      srcStart = 0
-    } else {
-      continue // a take on the cue track has no meaning
-    }
+    const src = cuePcm[clip.source.opfsPath]
+    if (!src) continue
 
-    const gain = dbToAmplitude(clip.gainDb + track.gainDb)
+    const gain = dbToAmplitude(clip.gainDb)
     const duck = clip.duck === "under-speech" ? duckEnv : null
     mixClipInto(
       out,
       src,
-      srcStart,
+      Math.round(clip.inSec * sampleRate),
       Math.round(clip.atSec * sampleRate),
       count,
       gain,
@@ -183,10 +162,10 @@ const brickLimit = (buf: Float32Array, ceilingDb: number, sampleRate: number): F
 }
 
 /**
- * The full render: assemble and process the speech, then — only if the cue track has
- * anything on it — assemble the cues (ducked under the speech envelope), sum them onto the
- * finished voice, and limit the sum to the ceiling. A session with no cues renders exactly
- * as it did before slice 6, chain output untouched.
+ * The full render: assemble and process the speech, then — only if a music slot is actually
+ * filled — assemble the cues (ducked under the speech envelope), sum them onto the finished
+ * voice, and limit the sum to the ceiling. A session with no music renders as speech alone,
+ * chain output untouched.
  */
 export const renderSession = (
   session: Session,
@@ -198,7 +177,7 @@ export const renderSession = (
   const rendered = renderProgramme(speech, sampleRate, session.chain)
   const durationSec = speech.length / sampleRate
 
-  if (!hasCueClips(session)) {
+  if (!hasMusic(session)) {
     return { ...rendered, durationSec }
   }
 

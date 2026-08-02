@@ -56,11 +56,32 @@
 - [ ] **Live-verify (browser gate):** beds heard, mix under real speech, file import + OPFS
       quota, iOS Safari, the −16/−1 measurement over a published blob, `.pub.md` round trip.
 
-## Carried forward (slice 7+)
+## Slice 7 — music slots, replacing the cue track (delivered, code-complete, live-pending)
+
+Design: `docs/superpowers/specs/2026-08-02-music-slots-design.md`.
+Handover: `docs/handover/slice-7-music-slots.md`.
+
+- [x] `Session.musicSlots` — intro / break / outro, each with an anchor, a length, gain, duck
+      and a picked track (`edl.types.ts`).
+- [x] The cue track is now derived, not stored: `cueClipsFromSlots` projects it on every read
+      (`musicSlots.ts`). Looping is a projection concern — repeated clips, 0.5 s crossfades.
+- [x] Openverse client, no API key (anon limit is per client IP): CC0/CC-BY over Freesound and
+      Wikimedia. Jamendo excluded — its CDN pins ACAO to another origin (`openverse.ts`).
+- [x] `credits` on `space.remanso.recording`, CC-BY only, plus credit lines under the markdown
+      link (`publishSession.ts`, `uploadRecording.ts`, lexicon).
+- [x] `MusicSlotPanel.vue` + mounted spec; `speechDurationSec` / `programmeDurationSec` split so
+      `musicSlots` imports `edl` and never the reverse.
+- [x] Deleted `beds.ts`, `cueImport.ts`, `CueTrackPanel.vue` and the cue-clip EDL ops.
+- [x] Gates: **284 tests**, build clean, typecheck, lint, fmt.
+- [ ] **Live-verify (browser gate):** search, preview, pick, render with music under real speech,
+      publish and read `credits` back off the PDS, OPFS quota with a fetched track, iOS Safari.
+
+## Carried forward (slice 8+)
 
 - [ ] Move the render to a Worker (still synchronous).
 - [ ] Recover-session reconcile-on-open banner (`listTakePaths`/`listCuePaths` + `checkQuota`).
 - [ ] EDL persistence in IndexedDB behind a comlink Worker.
-- [ ] Bare split (no reject) for cue insertion points; move a placed cue without remove-replace.
-- [ ] Per-clip best-of-N and a per-cue gain slider in the UI (`setClipMuted`/`setCueClipGainDb`
-      exist and are tested).
+- [ ] Trim inside a slot: `MusicSlot.inSec` exists and only the fill path writes it.
+- [ ] Search pagination — `searchMusic` takes a page and the panel never asks for a second one.
+- [ ] `/listen` should render a recording's `credits`; the field is written and nothing reads it.
+- [ ] Delete a slot's OPFS track when no other slot plays it (orphans survive today).

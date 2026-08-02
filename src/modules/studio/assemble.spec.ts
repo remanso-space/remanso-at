@@ -1,11 +1,45 @@
 import { describe, expect, it } from "vitest"
 
 import { assembleCues, assembleSpeech, renderSession, type CuePcm, type TakePcm } from "./assemble"
-import { renderBedBuffer } from "./beds"
-import { addBedClip, addCueFileClip, addTake, newSession, splitClipAt } from "./edl"
-import type { Session, Take } from "./edl.types"
+import { addChapter, addTake, newSession, splitClipAt } from "./edl"
+import type { MusicPick, MusicSlot, Session, Take } from "./edl.types"
+import { addSlot, newSlot, updateSlot } from "./musicSlots"
 
 const SR = 100 // small rate keeps the fixtures readable
+
+const PATH = "cues/x.mp3"
+
+const pick = (sourceDurationSec: number): MusicPick => ({
+  opfsPath: PATH,
+  sourceDurationSec,
+  credit: {
+    title: "Pad",
+    creator: "someone",
+    license: "cc0",
+    licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+    sourceUrl: "https://freesound.org/x",
+  },
+})
+
+/**
+ * A one-take session with one filled intro slot. Gain and duck are neutral by default so the
+ * assertions read placement rather than level. The slot's own fades still apply — they come
+ * from the projection, which has its own spec; assertions here read past them.
+ */
+const withMusic = (
+  takeSec: number,
+  patch: Partial<Omit<MusicSlot, "id" | "kind">> = {},
+): Session => {
+  const s0 = addTake(newSession("s", "e"), take("t1", takeSec), "c1")
+  const slot = newSlot("intro", "m1")
+  return updateSlot(addSlot(s0, slot), slot.id, {
+    lengthSec: takeSec,
+    gainDb: 0,
+    duck: false,
+    pick: pick(takeSec),
+    ...patch,
+  })
+}
 
 const take = (id: string, durationSec: number): Take => ({
   id,
@@ -96,72 +130,48 @@ describe("assembleSpeech", () => {
 })
 
 describe("assembleCues", () => {
-  it("renders a bed clip procedurally onto the cue timeline", () => {
-    const s0 = addTake(newSession("s", "e"), take("t1", 1), "c1")
-    const s = addBedClip(s0, { bedId: "pink", seed: 5, atSec: 0, lengthSec: 1 }, "q1")
-    // A short bed with no fades, so the placed samples equal a raw bed render.
-    const flat = {
-      ...s,
-      tracks: s.tracks.map((t) =>
-        t.kind === "cue"
-          ? { ...t, clips: t.clips.map((c) => ({ ...c, fadeInSec: 0, fadeOutSec: 0, gainDb: 0 })) }
-          : t,
-      ),
-    }
-    const out = assembleCues(flat, {}, null, SR)
-    const bed = renderBedBuffer("pink", 5, 0, 100, SR)
-    for (let i = 0; i < 100; i += 1) expect(out[i]).toBeCloseTo(bed[i], 6)
-  })
-
-  it("sums a file cue from decoded PCM at its placement", () => {
-    const s0 = addTake(newSession("s", "e"), take("t1", 0.1), "c1")
-    const s1 = addCueFileClip(s0, { opfsPath: "cues/x.mp3", atSec: 0.02, durationSec: 0.03 }, "q1")
-    const s = {
-      ...s1,
-      tracks: s1.tracks.map((t) =>
-        t.kind === "cue"
-          ? { ...t, clips: t.clips.map((c) => ({ ...c, fadeInSec: 0, fadeOutSec: 0 })) }
-          : t,
-      ),
-    }
-    const cuePcm: CuePcm = { "cues/x.mp3": Float32Array.from([9, 9, 9]) }
+  it("sums a slot's track from decoded PCM at its anchor", () => {
+    const s = withMusic(0.1, { lengthSec: 0.03, anchor: { kind: "absolute", atSec: 0.02 } })
+    const cuePcm: CuePcm = { [PATH]: Float32Array.from([9, 9, 9]) }
     const out = assembleCues(s, cuePcm, null, SR)
-    // Placed at 0.02 s → sample 2; three samples of value 9.
-    expect(Array.from(out.subarray(2, 5))).toEqual([9, 9, 9])
+    // Anchored at 0.02 s → samples 2..4, the middle one past both of the slot's fades.
+    expect(out[3]).toBeCloseTo(9, 6)
+    expect(out[2]).toBeGreaterThan(0)
+    expect(out[2]).toBeLessThan(9)
     expect(out[0]).toBe(0)
+    expect(out[5] ?? 0).toBe(0)
   })
 
-  it("applies the duck envelope to an under-speech cue and spares a duck:none cue", () => {
-    const s0 = addTake(newSession("s", "e"), take("t1", 0.05), "c1")
-    const s1 = addCueFileClip(s0, { opfsPath: "cues/x", atSec: 0, durationSec: 0.05 }, "q1")
-    const bare = (duck: "none" | "under-speech") => ({
-      ...s1,
-      tracks: s1.tracks.map((t) =>
-        t.kind === "cue"
-          ? { ...t, clips: t.clips.map((c) => ({ ...c, fadeInSec: 0, fadeOutSec: 0, duck })) }
-          : t,
-      ),
-    })
-    const cuePcm: CuePcm = { "cues/x": Float32Array.from({ length: 5 }, () => 1) }
+  it("applies the duck envelope to a ducked slot and spares an unducked one", () => {
+    const bare = (duck: boolean) => withMusic(0.05, { lengthSec: 0.05, duck })
+    const cuePcm: CuePcm = { [PATH]: Float32Array.from({ length: 5 }, () => 1) }
     const half = Float32Array.from({ length: 5 }, () => 0.5)
 
-    const ducked = assembleCues(bare("under-speech"), cuePcm, half, SR)
-    const unducked = assembleCues(bare("none"), cuePcm, half, SR)
-    expect(ducked[0]).toBeCloseTo(0.5, 6)
-    expect(unducked[0]).toBeCloseTo(1, 6)
+    const ducked = assembleCues(bare(true), cuePcm, half, SR)
+    const unducked = assembleCues(bare(false), cuePcm, half, SR)
+    // Sample 2 is past the fade in and before the fade out, so only the duck is left.
+    expect(ducked[2]).toBeCloseTo(0.5, 6)
+    expect(unducked[2]).toBeCloseTo(1, 6)
   })
 
-  it("excludes a muted cue", () => {
+  it("renders nothing for a slot nobody filled", () => {
     const s0 = addTake(newSession("s", "e"), take("t1", 1), "c1")
-    const s1 = addBedClip(s0, { bedId: "pink", seed: 5, atSec: 0, lengthSec: 1 }, "q1")
-    const s = {
-      ...s1,
-      tracks: s1.tracks.map((t) =>
-        t.kind === "cue" ? { ...t, clips: t.clips.map((c) => ({ ...c, muted: true })) } : t,
-      ),
-    }
+    const s = addSlot(s0, newSlot("intro", "m1"))
     const out = assembleCues(s, {}, null, SR)
     expect(out.every((v) => v === 0)).toBe(true)
+  })
+
+  it("renders nothing for a chapter slot whose mark was edited out", () => {
+    const s0 = addTake(newSession("s", "e"), take("t1", 0.05), "c1")
+    const withChapter = addChapter(s0, { takeId: "t1", atTakeSec: 999 })
+    const slot = newSlot("break", "m1")
+    const s = updateSlot(addSlot(withChapter, slot), slot.id, {
+      lengthSec: 0.05,
+      pick: pick(0.05),
+      gainDb: 0,
+    })
+    const cuePcm: CuePcm = { [PATH]: Float32Array.from({ length: 5 }, () => 1) }
+    expect(assembleCues(s, cuePcm, null, SR).every((v) => v === 0)).toBe(true)
   })
 })
 
@@ -182,30 +192,37 @@ describe("renderSession", () => {
     expect(result.samples.length).toBe(3 * sr)
   })
 
-  it("is byte-for-byte unchanged from the chain output when the cue track is empty", () => {
+  it("is byte-for-byte unchanged from the chain output when no slot is filled", () => {
     const s = addTake(newSession("s", "e"), take("t1", 1), "c1")
     const sr = 48_000
     const pcm: TakePcm = {
       t1: Float32Array.from({ length: sr }, (_, i) => 0.2 * Math.sin((2 * Math.PI * 440 * i) / sr)),
     }
-    // No cue clips → the two-stage path must not run, so a re-render matches exactly.
+    // No music → the two-stage path must not run, so a re-render matches exactly.
     const a = renderSession(s, pcm, sr)
     const b = renderSession(s, pcm, sr)
     expect(a.samples.length).toBe(b.samples.length)
     for (let i = 0; i < a.samples.length; i += 1) expect(a.samples[i]).toBe(b.samples[i])
   })
 
-  it("mixes a cue into the deliverable and keeps the ceiling", () => {
-    const s0 = addTake(newSession("s", "e"), take("t1", 1), "c1")
-    const s = addBedClip(s0, { bedId: "rain", seed: 3, atSec: 0, lengthSec: 1 }, "q1")
+  it("mixes music into the deliverable and keeps the ceiling", () => {
     const sr = 48_000
+    const s0 = addTake(newSession("s", "e"), take("t1", 1), "c1")
+    const slot = newSlot("intro", "m1")
+    const s = updateSlot(addSlot(s0, slot), slot.id, { lengthSec: 1, pick: pick(1) })
     const pcm: TakePcm = {
       t1: Float32Array.from({ length: sr }, (_, i) => 0.2 * Math.sin((2 * Math.PI * 440 * i) / sr)),
     }
-    const withCue = renderSession(s, pcm, sr)
+    const music: CuePcm = {
+      [PATH]: Float32Array.from(
+        { length: sr },
+        (_, i) => 0.3 * Math.sin((2 * Math.PI * 110 * i) / sr),
+      ),
+    }
+    const withCue = renderSession(s, pcm, sr, music)
     const speechOnly = renderSession(s0, pcm, sr)
 
-    // The cue changed the mix, and the final limiter still holds -1 dBFS.
+    // The music changed the mix, and the final limiter still holds -1 dBFS.
     let differs = false
     for (let i = 0; i < withCue.samples.length; i += 1)
       if (Math.abs(withCue.samples[i] - speechOnly.samples[i]) > 1e-6) {

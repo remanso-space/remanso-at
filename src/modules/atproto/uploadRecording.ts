@@ -1,5 +1,5 @@
 import type { PublicNoteBlob } from "./publicNote.types"
-import { RECORDING_COLLECTION } from "./recording.types"
+import { RECORDING_COLLECTION, type RecordingCredit } from "./recording.types"
 import { getActiveSession } from "./service/atprotoOAuth"
 
 interface UploadRecordingParams {
@@ -19,6 +19,8 @@ interface UploadRecordingParams {
    * recording stands on its own.
    */
   rkey?: string
+  /** Attribution for licences that require it; omitted from the record when empty. */
+  credits?: RecordingCredit[]
 }
 
 export type UploadRecordingResult =
@@ -70,6 +72,7 @@ export const uploadRecording = async ({
   durationSec,
   mimeType,
   rkey,
+  credits,
 }: UploadRecordingParams): Promise<UploadRecordingResult> => {
   const session = await getActiveSession(did)
   if (!session) return { ok: false, reason: "no-session" }
@@ -101,6 +104,7 @@ export const uploadRecording = async ({
           audio: blob,
           title,
           ...(durationSec ? { durationSec } : {}),
+          ...(credits?.length ? { credits } : {}),
           createdAt: new Date().toISOString(),
         },
       }),

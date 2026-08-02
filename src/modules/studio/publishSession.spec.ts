@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { uploadRecording } from "../atproto/uploadRecording"
 import { addTake, newSession } from "./edl"
-import type { Session, Take } from "./edl.types"
+import type { MusicPick, Session, Take } from "./edl.types"
 import { SESSION_SAMPLE_RATE } from "./edl.types"
 import { encodeOpus } from "./mediaCodec"
+import { addSlot, fillSlot, newSlot } from "./musicSlots"
 import { publishSession } from "./publishSession"
 
 // Encode and upload are the browser-coupled ends of the chain; everything between them is
@@ -98,6 +99,64 @@ describe("publishSession", () => {
       ok: false,
       error: "Publish failed (record-failed: 400 InvalidSwap).",
     })
+  })
+
+  // CC-BY is the only licence that asks for anything, so it is the only one that appears —
+  // in the record for machines, and under the markdown link for whoever reads the note.
+  it("carries CC-BY credits into the record and under the link", async () => {
+    const pick: MusicPick = {
+      opfsPath: "cues/pad.mp3",
+      sourceDurationSec: 30,
+      credit: {
+        title: "Pad",
+        creator: "someone",
+        license: "by",
+        licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+        sourceUrl: "https://freesound.org/pad",
+      },
+    }
+    const slot = newSlot("intro", "m1")
+    let session = addSlot(sessionWithTake(), slot)
+    session = fillSlot(session, slot.id, pick)
+
+    const result = await publishSession({
+      did: "did:plc:abc",
+      session,
+      title: "Ep 1",
+      takePcm: { t1: tone() },
+      musicPcm: { "cues/pad.mp3": tone() },
+    })
+
+    expect(vi.mocked(uploadRecording).mock.calls[0][0].credits).toEqual([pick.credit])
+    expect(result).toMatchObject({ ok: true })
+    if (result.ok) expect(result.link).toContain("Music: [Pad](https://freesound.org/pad)")
+  })
+
+  it("leaves a CC0 track out of the credits", async () => {
+    const slot = newSlot("intro", "m1")
+    let session = addSlot(sessionWithTake(), slot)
+    session = fillSlot(session, slot.id, {
+      opfsPath: "cues/pad.mp3",
+      sourceDurationSec: 30,
+      credit: {
+        title: "Pad",
+        creator: "someone",
+        license: "cc0",
+        licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+        sourceUrl: "https://freesound.org/pad",
+      },
+    })
+
+    const result = await publishSession({
+      did: "did:plc:abc",
+      session,
+      title: "Ep 1",
+      takePcm: { t1: tone() },
+      musicPcm: { "cues/pad.mp3": tone() },
+    })
+
+    expect(vi.mocked(uploadRecording).mock.calls[0][0].credits).toEqual([])
+    if (result.ok) expect(result.link).not.toContain("Music:")
   })
 
   it("refuses an empty timeline before touching the encoder", async () => {

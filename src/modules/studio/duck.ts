@@ -1,4 +1,4 @@
-// Ducking a cue under speech (slice 6). A bed or a music clip marked `duck: "under-speech"`
+// Ducking music under speech. A cue clip marked `duck: "under-speech"`
 // is pulled down whenever the voice is talking and allowed back up in the gaps. The key
 // that drives it is the *offline* speech envelope — the same silence detection pauses.ts
 // already runs — not a realtime sidechain. Offline is strictly better here: the reduction
@@ -13,9 +13,9 @@ import { dbToAmplitude } from "../../utils/loudness"
 import { detectSilences, type PauseOptions } from "./pauses"
 
 export interface DuckOptions {
-  /** How fast the duck engages when a line starts. Fast, so the bed is already down. */
+  /** How fast the duck engages when a line starts. Fast, so the music is already down. */
   attackSec: number
-  /** How slowly it lets go after a line ends. Slow, so the bed swells back naturally. */
+  /** How slowly it lets go after a line ends. Slow, so the music swells back naturally. */
   releaseSec: number
   /** How far the cue is pulled down while speech is present. */
   depthDb: number

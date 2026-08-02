@@ -162,6 +162,32 @@ describe("uploadRecording", () => {
     expect(body.record).not.toHaveProperty("durationSec")
   })
 
+  it("writes credits into the record, and omits the field when there are none", async () => {
+    const handler = () =>
+      vi
+        .fn()
+        .mockResolvedValueOnce(okJson({ blob: blobRef }))
+        .mockResolvedValueOnce(okJson({ uri: "at://did:plc:abc/space.remanso.recording/3xyz" }))
+
+    const credit = {
+      title: "Pad",
+      creator: "someone",
+      license: "by",
+      licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+      sourceUrl: "https://freesound.org/1",
+    }
+
+    const withCredits = handler()
+    vi.mocked(getActiveSession).mockResolvedValue({ fetchHandler: withCredits } as never)
+    await uploadRecording({ did: "did:plc:abc", file: makeFile(), title: "t", credits: [credit] })
+    expect(JSON.parse(withCredits.mock.calls[1][1].body).record.credits).toEqual([credit])
+
+    const withNone = handler()
+    vi.mocked(getActiveSession).mockResolvedValue({ fetchHandler: withNone } as never)
+    await uploadRecording({ did: "did:plc:abc", file: makeFile(), title: "t", credits: [] })
+    expect(JSON.parse(withNone.mock.calls[1][1].body).record).not.toHaveProperty("credits")
+  })
+
   it("reports no-session when the OAuth session cannot be restored", async () => {
     vi.mocked(getActiveSession).mockResolvedValue(null)
 

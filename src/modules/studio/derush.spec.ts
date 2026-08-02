@@ -17,7 +17,7 @@ import {
   setTakeMuted,
   soloTake,
 } from "./derush"
-import { addTake, newSession, speechTrack, timelineDurationSec } from "./edl"
+import { addTake, newSession, speechTrack, speechDurationSec } from "./edl"
 import type { Marker, Session, Take } from "./edl.types"
 
 const take = (id: string, durationSec: number, flags: Marker[] = []): Take => ({
@@ -50,7 +50,7 @@ describe("rejectTakeRange", () => {
     const after = rejectTakeRange(oneTake(), "t1", 4, 6)
 
     expect(placements(after)).toEqual([0, 4])
-    expect(timelineDurationSec(after)).toBe(8)
+    expect(speechDurationSec(after)).toBe(8)
   })
 
   it("shortens rather than splits when the region touches an edge", () => {
@@ -62,7 +62,7 @@ describe("rejectTakeRange", () => {
     const after = rejectTakeRange(oneTake(), "t1", 0, 10)
 
     expect(clips(after)).toEqual([])
-    expect(timelineDurationSec(after)).toBe(0)
+    expect(speechDurationSec(after)).toBe(0)
   })
 
   it("accepts the region in either order and ignores an empty one", () => {
@@ -105,7 +105,7 @@ describe("applyCuts", () => {
       [1, 5],
       [6, 10],
     ])
-    expect(timelineDurationSec(after)).toBe(8)
+    expect(speechDurationSec(after)).toBe(8)
   })
 })
 
@@ -183,7 +183,7 @@ describe("muting and best-of-N", () => {
     const after = setTakeMuted(twoTakes(), "t1", true)
 
     expect(clips(after)).toHaveLength(2)
-    expect(timelineDurationSec(after)).toBe(6)
+    expect(speechDurationSec(after)).toBe(6)
     expect(placements(after)).toEqual([0, 0])
   })
 

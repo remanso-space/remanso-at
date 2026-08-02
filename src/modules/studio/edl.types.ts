@@ -3,15 +3,64 @@
 // and every edit (trim, split, pause-removal, cue placement) is a field mutation on
 // this structure. The renderer projects it to audio; nothing here touches bytes.
 //
-// Multi-track from day one on purpose: derush (slice 5) and cues (slice 6) both need
-// a second track, and retrofitting one into a single-track mix loop is expensive while
-// designing it in is nearly free. Slice 4 only populates the speech track.
+// Multi-track from day one on purpose: derush and music both need a second track, and
+// retrofitting one into a single-track mix loop is expensive while designing it in is nearly
+// free. Only the speech track is stored, though — the cue track is projected from the music
+// slots on every read (see musicSlots.ts), so a slot's length lives in exactly one place.
 
 /** The whole capture pipeline is pinned to 48 kHz — see the plan's capture notes. */
 export const SESSION_SAMPLE_RATE = 48_000
 
-/** Procedural ambient beds (slice 6). Named here so ClipSource can reference them. */
-export type BedId = "rain" | "river" | "wind" | "surf" | "brown" | "pink" | "roomTone"
+/** What a music slot marks: an opening, a beat between chapters, a close. */
+export type SlotKind = "intro" | "break" | "outro"
+
+/**
+ * Where a track came from and under what terms. Carried on the clip so the renderer, the
+ * panel and the publisher all read the same object, and written into the published record
+ * for CC-BY. CC0 asks for nothing, but the credit is kept anyway so the panel can show the
+ * author what they picked, and so a licence added to the pool later needs no new field.
+ */
+export interface MusicCredit {
+  title: string
+  creator: string
+  license: "cc0" | "by"
+  licenseUrl: string
+  sourceUrl: string
+}
+
+/** A track fetched from Openverse and stored in OPFS, ready to fill a slot. */
+export interface MusicPick {
+  opfsPath: string
+  sourceDurationSec: number
+  credit: MusicCredit
+}
+
+/**
+ * What a slot hangs off. An absolute anchor is a timeline second (a snap target the derush
+ * pass already found); a chapter anchor follows its mark through every later edit, and
+ * resolves to nothing if a trim took that mark out.
+ */
+export type SlotAnchor =
+  | { kind: "absolute"; atSec: number }
+  | { kind: "chapter"; chapterIndex: number }
+  | { kind: "speech-end" }
+
+/**
+ * A named moment with music under it. Slots are the authoring surface and the source of
+ * truth: the cue track is projected from them at render (see musicSlots.ts) rather than
+ * stored, so a slot's length and gain live in exactly one place.
+ */
+export interface MusicSlot {
+  id: string
+  kind: SlotKind
+  anchor: SlotAnchor
+  lengthSec: number
+  /** Into the picked source — where in the track the slot starts playing. */
+  inSec: number
+  gainDb: number
+  duck: boolean
+  pick: MusicPick | null
+}
 
 /**
  * A live flag, appended while recording (plan: "flag-while-recording"). Same button:
@@ -38,13 +87,11 @@ export interface Take {
 
 export type ClipSource =
   | { kind: "take"; takeId: string } // recorded speech
-  | { kind: "file"; opfsPath: string } // imported music / sound effect
-  | { kind: "bed"; bedId: BedId; seed: number } // procedural, infinite, position-addressable
+  | { kind: "music"; opfsPath: string; credit: MusicCredit } // an openly licensed track in OPFS
 
 /**
  * One region of a source placed on the timeline. Trim is `inSec`/`outSec`; split makes
- * two clips that share a source; `atSec` is where it lands. Cue-only fields (`duck`,
- * fades) are inert on speech clips.
+ * two clips that share a source; `atSec` is where it lands. `duck` is inert on speech clips.
  */
 export interface Clip {
   id: string
@@ -65,7 +112,7 @@ export interface Clip {
 
 export interface Track {
   id: string
-  kind: "speech" | "cue"
+  kind: "speech"
   clips: Clip[]
   gainDb: number
 }
@@ -98,8 +145,10 @@ export interface Session {
   sampleRate: typeof SESSION_SAMPLE_RATE
   /** Immutable, append-only. */
   takes: Take[]
-  /** The timeline — [speech, cue]. */
+  /** The timeline. Only the speech track is stored; the cue track is projected from slots. */
   tracks: Track[]
   chapters: Chapter[]
+  /** Music under the programme. Projected onto the cue track at render. */
+  musicSlots: MusicSlot[]
   chain: ChainSettings
 }

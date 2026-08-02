@@ -1,6 +1,7 @@
 import { MAX_RECORDING_BYTES } from "../atproto/recording.types"
-import { clipDurationSec, cueTrack, timelineDurationSec } from "./edl"
+import { clipDurationSec } from "./edl"
 import type { Session } from "./edl.types"
+import { cueClipsFromSlots, programmeDurationSec } from "./musicSlots"
 import { downmixToMono, resampleLinear } from "./pcm"
 
 // The browser-coupled edges of the render: decode a recorded take to mono PCM at the
@@ -14,10 +15,10 @@ const MIN_BITRATE = 32_000
 const SIZE_SAFETY = 0.9
 
 /**
- * What the cue track is carrying, which sets how much bitrate the encode wants. Speech-only
- * Opus is transparent at 64 kbps; the odd sting barely moves it; a bed or music under the
- * whole episode is broadband and asks for 128. Higher bitrate is fewer minutes under the
- * 50 MB blob ceiling — the tension the studio surfaces once the cue track is populated.
+ * What the music slots are carrying, which sets how much bitrate the encode wants.
+ * Speech-only Opus is transparent at 64 kbps; a short intro barely moves it; music under
+ * much of the episode is broadband and asks for 128. Higher bitrate is fewer minutes under
+ * the 50 MB blob ceiling — the tension the studio surfaces once a slot is filled.
  */
 export type ContentTier = "speech" | "occasional-cue" | "music-heavy"
 
@@ -44,21 +45,16 @@ export const minutesAtTier = (tier: ContentTier): number =>
   Math.floor((MAX_RECORDING_BYTES * 8 * SIZE_SAFETY) / PREFERRED_BITRATE[tier] / 60)
 
 /**
- * The tier the cue track puts the encode in. No audible cue → speech. A room-tone fill is
- * ignored (it is an inaudible floor, not music), so laying one down does not cost bitrate.
- * A few short cues covering little of the timeline → occasional-cue; a bed or music file
- * under most of it → music-heavy.
+ * The tier the music puts the encode in. Nothing playing → speech. Slots covering under a
+ * quarter of the programme → occasional-cue; more than that → music-heavy. Measured on the
+ * projected clips, so a slot whose chapter anchor no longer resolves costs nothing.
  */
 export const contentTier = (session: Session): ContentTier => {
-  const track = cueTrack(session)
-  if (!track) return "speech"
-  const audible = track.clips.filter(
-    (c) => !c.muted && !(c.source.kind === "bed" && c.source.bedId === "roomTone"),
-  )
-  if (audible.length === 0) return "speech"
+  const clips = cueClipsFromSlots(session)
+  if (clips.length === 0) return "speech"
 
-  const total = timelineDurationSec(session)
-  const covered = audible.reduce((sum, c) => sum + clipDurationSec(c), 0)
+  const total = programmeDurationSec(session)
+  const covered = clips.reduce((sum, c) => sum + clipDurationSec(c), 0)
   return total > 0 && covered / total >= 0.25 ? "music-heavy" : "occasional-cue"
 }
 

@@ -1,10 +1,11 @@
 import { recordingMarkdownLink } from "../atproto/publishedNotes"
 import { uploadRecording } from "../atproto/uploadRecording"
 import { renderSession, type CuePcm, type TakePcm } from "./assemble"
-import { cueTrack, speechTrack, timelineDurationSec } from "./edl"
-import type { Session } from "./edl.types"
+import { speechTrack } from "./edl"
+import type { MusicCredit, Session } from "./edl.types"
 import { SESSION_SAMPLE_RATE } from "./edl.types"
 import { contentTier, decodeTakeToMono, encodeOpus } from "./mediaCodec"
+import { creditsToPublish, musicPathsInUse, programmeDurationSec } from "./musicSlots"
 import { analyzeTakeFile } from "./analyzeTake"
 import { readTakeFile } from "./opfsTakes"
 import { readCueFile } from "./opfsCues"
@@ -30,8 +31,23 @@ export interface PublishParams {
   title: string
   /** Samples already decoded by the review pass, by take id — anything missing is decoded here. */
   takePcm?: TakePcm
+  /** Music already decoded, by OPFS path — anything missing is decoded here, same as takes. */
+  musicPcm?: CuePcm
   /** The rkey of the note being recorded against; the recording is written there. */
   noteRkey?: string
+}
+
+/**
+ * The credit lines that ride under the markdown link. CC-BY asks for the title, the author
+ * and the licence, and the note is where a reader can actually see them — a WebM blob has
+ * nowhere to carry attribution, and the record's `credits` field is for machines.
+ */
+const withCredits = (link: string, credits: MusicCredit[]): string => {
+  if (credits.length === 0) return link
+  const lines = credits.map(
+    (c) => `Music: [${c.title}](${c.sourceUrl}) by ${c.creator} — [CC BY](${c.licenseUrl})`,
+  )
+  return `${link}\n\n${lines.join("\n")}`
 }
 
 export type PublishResult =
@@ -55,24 +71,15 @@ const takeIdsInUse = (session: Session): Set<string> => {
   return ids
 }
 
-/** OPFS paths of the imported cue files the timeline still plays. Beds need no decode. */
-const cuePathsInUse = (session: Session): Set<string> => {
-  const paths = new Set<string>()
-  for (const clip of cueTrack(session)?.clips ?? []) {
-    if (clip.muted) continue
-    if (clip.source.kind === "file") paths.add(clip.source.opfsPath)
-  }
-  return paths
-}
-
 export const publishSession = async ({
   did,
   session,
   title,
   takePcm = {},
+  musicPcm = {},
   noteRkey,
 }: PublishParams): Promise<PublishResult> => {
-  if (timelineDurationSec(session) <= 0) {
+  if (programmeDurationSec(session) <= 0) {
     return { ok: false, error: "There is nothing to publish — every region is rejected or muted." }
   }
 
@@ -89,14 +96,15 @@ export const publishSession = async ({
     pcm[takeId] = analyzed.samples
   }
 
-  // Imported cue files are decoded to mono at the session rate, the same as takes; beds are
-  // rendered inside the assembler and need nothing here.
-  const cuePcm: CuePcm = {}
-  for (const path of cuePathsInUse(session)) {
+  // Music is decoded to mono at the session rate, the same as takes. One decode per track,
+  // however many slots play it.
+  const cuePcm: CuePcm = { ...musicPcm }
+  for (const path of musicPathsInUse(session)) {
+    if (cuePcm[path]) continue
     const file = await readCueFile(path)
-    if (!file) return { ok: false, error: "A cue file could not be read back from storage." }
+    if (!file) return { ok: false, error: "A music track could not be read back from storage." }
     const decoded = await decodeTakeToMono(file, SESSION_SAMPLE_RATE)
-    if (!decoded) return { ok: false, error: "A cue file could not be decoded." }
+    if (!decoded) return { ok: false, error: "A music track could not be decoded." }
     cuePcm[path] = decoded.samples
   }
 
@@ -114,6 +122,7 @@ export const publishSession = async ({
   )
   if (!encoded) return { ok: false, error: "Opus encoding failed." }
 
+  const credits = creditsToPublish(session)
   const result = await uploadRecording({
     did,
     file: encoded.file,
@@ -121,6 +130,7 @@ export const publishSession = async ({
     durationSec: Math.round(rendered.durationSec),
     mimeType: encoded.mimeType,
     rkey: noteRkey,
+    credits,
   })
 
   if (!result.ok) {
@@ -130,7 +140,7 @@ export const publishSession = async ({
 
   return {
     ok: true,
-    link: noteRkey ? null : recordingMarkdownLink(result.uri, title),
+    link: noteRkey ? null : withCredits(recordingMarkdownLink(result.uri, title), credits),
     uri: result.uri,
     durationSec: rendered.durationSec,
     measuredLufs: rendered.measuredLufs,

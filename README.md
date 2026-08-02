@@ -7,10 +7,10 @@ Deployed at https://remanso.at
 Sibling to [remanso.space](https://remanso.space), which is the writing tool. This is the other half
 of the pair: what happens to a note once it is public.
 
-| Route     | What                                                                                                                                                                                                                                                   |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/studio` | Multi-take capture, derush, non-destructive trim, a post-production chain, and spot-placed music, sound effects or ambient beds mixed into the render. Publishes a `space.remanso.recording` and hands you the markdown link to paste into a note.     |
-| `/listen` | Browse `space.remanso.recording` — yours from your PDS, everyone's from the [appview](https://api.remanso.space) once it indexes them. Notes themselves are not rendered here; links to a note open remanso.space, which stays canonical for `/pub/…`. |
+| Route     | What                                                                                                                                                                                                                                                                                |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/studio` | Multi-take capture, derush, non-destructive trim, a post-production chain, and music slots — an intro, a break, an outro — filled from openly licensed audio and mixed into the render. Publishes a `space.remanso.recording` and hands you the markdown link to paste into a note. |
+| `/listen` | Browse `space.remanso.recording` — yours from your PDS, everyone's from the [appview](https://api.remanso.space) once it indexes them. Notes themselves are not rendered here; links to a note open remanso.space, which stays canonical for `/pub/…`.                              |
 
 ## Why the studio hands you a link
 
@@ -94,6 +94,13 @@ delivered = 2026-10-05
 learning = "The bed engine is a seeded pure function of the absolute sample index — render(bed, seed, startSample, count, out) — not a Web Audio graph, because only a function is position-addressable: a window taken from the middle of the stream is bit-identical to the same slice of a full render, which the /ambient page (cut) can no longer shake bugs out of, so the windowed-equality property is asserted directly like renderChain's. White noise is a stateless hash of index; every stateful part (pink/brown integrators, biquads, the wind cutoff walk) replays forward from 0 each call, which is O(startSample) and exactly right because a bed clip renders once in a forward pass. Mix is two stages, one sum: the chain runs over SPEECH ONLY, then cues are summed after and a final brick-wall limiter guards the ceiling — running the expander over music stops it gating room tone and the compressor pumps the bed against the voice. Ducking is offline, driven by the same detectSilences the derush pass already ran (300 ms attack, 800 ms release), so the bed is already down before the first syllable and it cost nothing. Bitrate now reacts to a content tier (speech 64 / occasional-cue 96 / music-heavy 128 kbps), a room-tone fill excluded from the tier since it is an inaudible floor. CC-BY stays out by construction: built-in beds are procedural and carry no licence, imported files are the user's own, and the app builds no attribution machinery because a WebM blob has nowhere to carry it. The daisyUI-token trap bit again and wider than slice 4 knew: the word 'dropdown' in a *comment* emitted the whole .dropdown component (2.6 kB) — Tailwind scans comments too, so watch the CSS after any component. Chapters closed as a snap target the cue track wanted anyway. Code-complete with all build gates green; live-mic/browser verification still pending, the same gate slices 4 and 5 left open."
 
 [[feature]]
+name = "Music slots — an open-licence library"
+start = 2026-10-12
+original = 2026-10-12
+delivered = 2026-10-12
+learning = "The cue track's authoring model was wrong and the sound sources were the wrong sound: an author wants \"something calm under the intro\", not a clip at a snap target, and procedural beds are filtered noise, never music. Slots replaced both, and the cue track survives only as a projection of them — cueClipsFromSlots derives clips on every read, so a slot's length lives in one place and there is no stale clip to keep in sync. Looping fell out of that for free: a short track under a long slot projects to repeated clips with a 0.5 s crossfade at each seam, which the assembler already knew how to mix. Openverse needs no API key because its anonymous limit (20/min, 200/day) is counted per client IP, so each author spends their own budget and no secret ships in the bundle. Two of its three audio providers are usable and the third is the one that hurts: Jamendo is the actual music catalogue, and its storage host pins access-control-allow-origin to an unrelated origin, so the browser cannot read the samples a mix needs — excluded in the query rather than filtered from the results. Licences are CC0 and CC-BY only; CC-BY-SA would push its terms onto the whole episode. Attribution now exists where it said it never would: the recording lexicon gained a credits array, and the markdown link comes back with credit lines under it. CC0 publishes nothing, because CC0 asks for nothing."
+
+[[feature]]
 name = "Appview indexes recordings"
 start = 2026-10-19
 original = 2026-11-02
@@ -123,7 +130,7 @@ requires = ["Studio — capture to link"]
 [[milestone]]
 name = "Real post-production"
 week = 2026-10-26
-requires = ["Derush", "Cue track — music, sounds, ambient"]
+requires = ["Derush", "Music slots — an open-licence library"]
 
 [[milestone]]
 name = "1.0"

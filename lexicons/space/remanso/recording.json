@@ -32,7 +32,45 @@
           "createdAt": {
             "type": "string",
             "format": "datetime"
+          },
+          "credits": {
+            "type": "array",
+            "description": "Attribution for openly licensed music mixed into the recording. Only licences that require it are listed — a CC0 track is deliberately absent, because CC0 asks for nothing and an entry here would imply otherwise.",
+            "maxLength": 64,
+            "items": {
+              "type": "ref",
+              "ref": "#credit"
+            }
           }
+        }
+      }
+    },
+    "credit": {
+      "type": "object",
+      "description": "One openly licensed work used in the recording, and where its terms live.",
+      "required": ["title", "creator", "license", "licenseUrl", "sourceUrl"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "creator": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "license": {
+          "type": "string",
+          "description": "The licence's short id, e.g. \"by\".",
+          "maxLength": 64
+        },
+        "licenseUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "sourceUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "The work's landing page at its provider."
         }
       }
     }

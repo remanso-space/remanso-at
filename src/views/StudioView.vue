@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from "vue"
 
-import CueTrackPanel from "../components/studio/CueTrackPanel.vue"
+import MusicSlotPanel from "../components/studio/MusicSlotPanel.vue"
 import DerushPanel from "../components/studio/DerushPanel.vue"
 import { useSession } from "../composables/useSession"
 import { useTakeRecorder } from "../composables/useTakeRecorder"
@@ -14,7 +14,8 @@ import {
 import { toShortDid } from "../modules/atproto/shortDid"
 import type { TakePcm } from "../modules/studio/assemble"
 import { analyzeTakeFile, type TakeAnalysis } from "../modules/studio/analyzeTake"
-import { addTake, newSession, timelineDurationSec } from "../modules/studio/edl"
+import { addTake, newSession } from "../modules/studio/edl"
+import { programmeDurationSec } from "../modules/studio/musicSlots"
 import type { Session } from "../modules/studio/edl.types"
 import { SESSION_SAMPLE_RATE } from "../modules/studio/edl.types"
 import { canUndo as historyCanUndo, commit, historyOf, undo } from "../modules/studio/history"
@@ -63,7 +64,7 @@ const copied = ref(false)
 // underneath, and picking another note afterwards must not rewrite the confirmation.
 const attachedTo = ref<{ title: string; url: string } | null>(null)
 
-const hasProgramme = computed(() => timelineDurationSec(session.value) > 0)
+const hasProgramme = computed(() => programmeDurationSec(session.value) > 0)
 
 const loadNotes = async () => {
   if (!did.value) return
@@ -308,8 +309,8 @@ const copyLink = async () => {
             @undo="history = undo(history)"
           />
 
-          <!-- Cue track: music, sounds and procedural ambient under the speech -->
-          <CueTrackPanel
+          <!-- Music: named slots filled from an open-licence library -->
+          <MusicSlotPanel
             v-if="session.takes.length && publishState !== 'done'"
             :session="session"
             :analyses="analyses"
@@ -650,7 +651,10 @@ const copyLink = async () => {
   border-radius: 2px;
 }
 .badge {
-  color: var(--hw-pink-deep);
+  /* --hw-pink-deep is raw editorial pink: ~4.8:1 on a plain row but ~3.9:1 over the
+     pink-wash of a picked row — under AA, and this glyph carries meaning. --link-accent
+     re-pins the same hue to a fixed lightness (~7:1 on rows, ~5.8:1 on pink-wash). */
+  color: var(--link-accent);
   font-size: 0.9rem;
 }
 /* ink-faint is a ~2.6:1 grey — legible as a rule, not as a glyph that carries meaning. */

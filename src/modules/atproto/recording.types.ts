@@ -9,10 +9,21 @@ export const RECORDING_COLLECTION = "space.remanso.recording"
 // better error than a failed upload.
 export const MAX_RECORDING_BYTES = 50_000_000
 
+/** Mirrors the lexicon's `#credit`: one openly licensed work and where its terms live. */
+export interface RecordingCredit {
+  title: string
+  creator: string
+  license: string
+  licenseUrl: string
+  sourceUrl: string
+}
+
 export interface Recording {
   audio: PublicNoteBlob
   title?: string
   durationSec?: number
   recordedAt?: string
+  /** Attribution for music that requires it. CC0 tracks are absent by design. */
+  credits?: RecordingCredit[]
   createdAt: string
 }

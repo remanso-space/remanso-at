@@ -1,0 +1,70 @@
+{
+  "note": "Captured from api.openverse.org/v1/audio/?q=calm ambient pad&license=cc0,by&source=freesound,wikimedia_audio on 2026-08-02, then trimmed to the fields the studio reads and extended with rows the mapper must reject.",
+  "result_count": 38,
+  "results": [
+    {
+      "id": "5ee47804-c765-4da4-bf20-3382254456bd",
+      "title": "Soundscape - Last 31 - Cinematic Piano",
+      "creator": "Tri-Tachyon",
+      "url": "https://cdn.freesound.org/previews/353/353156_3492460-hq.mp3",
+      "filetype": "mp3",
+      "duration": 36500,
+      "license": "by",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "foreign_landing_url": "https://freesound.org/people/Tri-Tachyon/sounds/353156"
+    },
+    {
+      "id": "20502270-b305-450f-927f-1bc502814064",
+      "title": "Ambient Space Texture",
+      "creator": "Andrewkn",
+      "url": "https://cdn.freesound.org/previews/474/474864_7038073-hq.mp3",
+      "filetype": "mp3",
+      "duration": 316098,
+      "license": "cc0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "foreign_landing_url": "https://freesound.org/people/Andrewkn/sounds/474864"
+    },
+    {
+      "id": "no-url",
+      "title": "Nothing to fetch",
+      "creator": "someone",
+      "filetype": "mp3",
+      "duration": 12000,
+      "license": "cc0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "foreign_landing_url": "https://freesound.org/people/someone/sounds/1"
+    },
+    {
+      "id": "share-alike",
+      "title": "Infectious terms",
+      "creator": "someone",
+      "url": "https://cdn.freesound.org/previews/1/1.mp3",
+      "filetype": "mp3",
+      "duration": 12000,
+      "license": "by-sa",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "foreign_landing_url": "https://freesound.org/people/someone/sounds/2"
+    },
+    {
+      "id": "undecodable",
+      "title": "A container the studio cannot read",
+      "creator": "someone",
+      "url": "https://upload.wikimedia.org/x.mid",
+      "filetype": "mid",
+      "duration": 12000,
+      "license": "cc0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "foreign_landing_url": "https://commons.wikimedia.org/wiki/File:X.mid"
+    },
+    {
+      "id": "no-duration",
+      "title": "Length unknown",
+      "creator": "someone",
+      "url": "https://cdn.freesound.org/previews/2/2.mp3",
+      "filetype": "mp3",
+      "license": "cc0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "foreign_landing_url": "https://freesound.org/people/someone/sounds/3"
+    }
+  ]
+}
