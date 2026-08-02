@@ -47,6 +47,11 @@ const session = computed<Session>(() => history.value.present)
 const canUndo = computed(() => historyCanUndo(history.value))
 const edit = (next: Session) => (history.value = commit(history.value, next))
 
+// A recorded take is a new baseline, not an undoable step. Undo is the derush pass, and it
+// must never peel a recording back off and leave the studio with nothing to publish. Prior
+// edits are banked into this baseline; undo afterwards reaches back only to here.
+const recordTake = (next: Session) => (history.value = historyOf(next))
+
 // Decoded samples and the analysis overlays, by take id. Neither is reactive per-element:
 // these are megabytes of Float32Array, and only ever swapped wholesale.
 const takePcm: TakePcm = {}
@@ -200,7 +205,7 @@ const stopRecording = async () => {
 
   if (!analyzed) {
     takeWarning.value = "That take could not be analysed, so it has no waveform. It is still here."
-    edit(addTake(session.value, take, `${take.id}:0`))
+    recordTake(addTake(session.value, take, `${take.id}:0`))
     selectedTakeId.value = take.id
     return
   }
@@ -210,7 +215,7 @@ const stopRecording = async () => {
   analyses.value = { ...analyses.value, [take.id]: analysis }
 
   const peaksPath = await writePeaks(take.id, analysis.peaks).catch(() => "")
-  edit(addTake(session.value, { ...take, durationSec, peaksPath }, `${take.id}:0`))
+  recordTake(addTake(session.value, { ...take, durationSec, peaksPath }, `${take.id}:0`))
   selectedTakeId.value = take.id
 }
 
