@@ -48,15 +48,15 @@ waveform needs the whole buffer anyway.
 
 ```macroplan
 title = "Remanso Studio"
-start = 2026-08-03
+start = 2026-07-27
 end = 2026-11-09
 
 [[feature]]
 name = "Domain handover + deploy"
-start = 2026-08-03
-original = 2026-08-03
-status = "on-track"
-note = "remanso.at freed from the remanso.space Coolify app; new app needs the hostname plus www."
+start = 2026-07-27
+original = 2026-07-27
+delivered = 2026-07-27
+learning = "Deploying an empty shell first surfaced three infra bugs before any feature code existed: Coolify truncates non-GitHub git URLs on create, pnpm's build-approval file has to be COPYd into the image, and nginx has no mime type for .webmanifest."
 
 [[feature]]
 name = "The ode — landing page"
