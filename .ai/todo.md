@@ -1,48 +1,46 @@
-# Slice 4 — studio: capture → link
+# Slice 5 — derush: the review pass
 
-## Slice 2 loose ends (DONE 2026-08-02)
+## Slice 4 close-out (DONE 2026-08-02)
 
-- [x] Live bundle stuck on slice-1 (`index-DPF8Ao1p.js`) — Coolify deploy never ran during apoena→marque migration. Triggered redeploy via Coolify API; live now `index-DKX4TXpw.js` (slice-2). apex 200/ssl ok, www 301, /studio 200, client-metadata `Remanso Studio`.
-- [x] Both repos' commits present on Gitea AND GitHub (remanso-at `4b73317`, remanso `1107b6d`) — no split mirror, no push needed.
-- [x] apoena.dev NOT retired — git.apoena.dev + platform.apoena.dev reachable; no origin/webhook re-point needed.
-- [x] Browser-verify OAuth end-to-end — treated as covered (already browser-verified in slice 2; same code now live, metadata confirmed `Remanso Studio`).
+- [x] StudioView double-publish guard + take preview — already committed as `3f8b9e5`; both
+      mirrors (Gitea + GitHub) carry it, live bundle matches the local build hash.
+- [x] `pnpm fmt:check` was red on `docs/handover/favicon-ripples.md` (committed unformatted by
+      the favicon-lab work) — fixed in `9adcae8`.
+- [ ] **Runtime acceptance — still blocked.** The Claude browser extension is not connected, so
+      no browser path has been exercised: live mic, OPFS, MediaRecorder MIME, WebCodecs Opus,
+      the −16 ±1 LUFS / −1 dBFS measurement over a published blob, the `.pub.md` round trip,
+      and the iOS Safari gate. Everything below is code-complete against the same gap.
 
-## Slice 4 groundwork — increment 1: mirror pure primitives + test harness (DONE)
+## Slice 5 (DONE, runtime-pending)
 
-- [x] Mirror verbatim (+ specs): loudness, parseAtUri, shortDid, withATProtoImages, formatDuration (AudioLevels.vue deferred to capture increment — needs sass, no consumer yet)
-- [x] Mirror uploadRecording (+ spec) — `@/` imports rewritten to relative
-- [x] Test harness: vitest + @vue/test-utils + jsdom; standalone `vitest.config.ts` (vite7/vite8 type split — kept out of tsconfig); src/test/setup.ts; `test`/`test:run` scripts; esbuild build-script decision (false) in pnpm-workspace.yaml
-- [x] Green: 60 tests pass (6 files), build clean (zero warnings, font @import line 1), lint, fmt:check
-- NOT pushed — awaiting go-ahead (push auto-deploys)
+- [x] Peaks pass — `peaks.ts` (compute, encode/decode with a version header, column reduce),
+      `opfsPeaks.ts`, `take.peaksPath` filled on stop.
+- [x] `speechOnsets` in `pauses.ts`, off the same envelope as the silences.
+- [x] `analyzeTake.ts` — one decode per take feeds peaks, cuts, onsets, LUFS, and keeps the
+      samples so publish does not decode again.
+- [x] `derush.ts` — reject region, ripple relayout, apply pause cuts, retake regions, mute /
+      solo, shuttle ladder, flag jumps, kept-playback skip. All pure, all specced.
+- [x] `history.ts` — undo as a list of past EDLs. No redo.
+- [x] `TakeWaveform.vue` — peaks + kept/removed + flags + cut candidates + onsets + in/out +
+      playhead. Click to seek, drag to select.
+- [x] `DerushPanel.vue` — take list (duration / kept / flags / LUFS), transport, keyboard
+      (space, J K L, I O, X, `[` `]`, ctrl-Z), remove pauses, cut flagged retakes.
+- [x] Flags → cuts: a `retake` mark becomes a rejectable region back to the speech onset.
+- [x] Flag decision: **two buttons, two keys** (`F` mark, `R` retake). Double-tap dropped —
+      see the handover for why.
+- [x] `publishSession.ts` renders the whole EDL; `publishTake.ts` removed. Pause removal is no
+      longer a publish-time boolean.
+- [x] StudioView is session-driven: multi-take, undo stack, derush panel, publish, reset.
+- [x] Gates: build clean (zero warnings, font `@import` line 1), lint, fmt:check, 186 tests.
+- [x] README macroplan: Derush delivered + learning. `docs/handover/slice-5-derush.md`.
 
-## Slice 4 remaining (later increments)
+## Carried forward (slice 6+)
 
-- [ ] Capture: fork useAudioRecorder → useMicDevices / useCaptureGraph / useTakeRecorder (MIME_CANDIDATES, device picker, learned-gain, wall-clock elapsed, beforeunload). AudioContext pinned 48000, audioBitsPerSecond 96000, limiter -1 clip guard.
-- [ ] OPFS chunk streaming (ondataavailable → FileSystemWritableFileStream), one file per take; storage.estimate + persist warn; recover-session reconcile.
-- [x] EDL types (Session/Take/Track/Clip/Chapter/Marker/ChainSettings) — `src/modules/studio/edl.types.ts`
-- [x] EDL ops: newSession, addTake, trimClip, splitClipAt, timelineDurationSec, projectChapterToTimeline (chapters survive trims/pause-removal) — `edl.ts` + 14 specs. DEFAULT_CHAIN podcast-voice defaults.
-- [ ] EDL IndexedDB persistence behind a comlink Worker.
-- [ ] flag-while-recording (tap = mark, double-tap = retake) → take.flags.
-- [x] Pause/silence detection: `src/modules/studio/pauses.ts` — rmsEnvelopeDb, detectSilences (two-threshold hysteresis off measured floor + dynamic-range guard against cutting speech), planCuts (head/tail full, interior→350ms) + 11 specs. Emits EDL cut regions, never processed audio.
-- [ ] Wire cuts → EDL edits (split clip at each cut boundary, drop the middle, ripple) + review UI (slice 5 shares it).
-- [x] Render chain DSP (pure, seam-free): `src/modules/studio/renderChain.ts` — RBJ HPF + presence shelf (persistent biquad state), two-pass loudness normalize to -16, look-ahead limiter with hard -1 dBFS guarantee (sliding-window-max deque). `renderProgramme(pcm, sr, chain)`. 9 specs incl. windowed-equality + ceiling guarantee. (expander/compressor = later "podcast voice" increment)
-- [x] EDL→PCM assembly (pure): `studio/assemble.ts` — assembleSpeech (clips→timeline PCM, trims/placement/gain/equal-power fades, pause-cut ripple), renderSession (assemble→renderProgramme). 8 specs.
-- [x] Pure PCM helpers: `studio/pcm.ts` — downmixToMono, resampleLinear. 7 specs.
-- [x] Codec wrappers (browser, compile-clean, runtime-pending): `studio/mediaCodec.ts` — canEncodeOpus gate, decodeTakeToMono (mediabunny AudioBufferSink stream→mono@rate), encodeOpus (AudioBufferSource→WebM/Opus File), bitrateFor. mediabunny dep added.
-- [ ] Move render to a Worker (currently synchronous; fine for slice-4 lengths, revisit if it blocks UI).
-- [ ] canEncodeAudio("opus") gate at session start; refuse clearly.
-- [x] Publish deliverable (pure): `recordingMarkdownLink(atUri, title)` → `![<title> - audio](at://…)` + round-trip test. Write path `uploadRecording` already mirrored.
-- [x] Opus encode + `canEncodeAudio("opus")` gate (StudioView onMounted refuses clearly) → uploadRecording → link. Orchestrated in `studio/publishTake.ts` (decode→cuts→render→encode→upload→link). [built, runtime-pending]
-- [x] my-published-notes list (pure scan + mockable fetch): `src/modules/atproto/publishedNotes.ts` — listPublishedNotes (listRecords space.remanso.note, cursor), noteRecordingUris (mark notes with embedded `at://…/space.remanso.recording/`), recordingAltFor, recordingMarkdownLink. 12 specs.
-- [x] StudioView UI: canEncodeOpus gate → notes list (pick prefills title, ♪/— audio badge) → record (mic picker, live meter, flag/bad-take, elapsed) → review (remove-pauses toggle) → publish → copyable link. `useTakeRecorder.ts` (AudioContext@48k, 96 kbps, MIME pick, OPFS stream, beforeunload), `opfsTakes.ts` (chunk-stream store + quota check). [built, runtime-pending]
-- [x] Suppress NewVersion toast while recording — `useRecordingState.ts` shared flag, gated in NewVersion.vue.
-- [ ] iOS Safari acceptance gate.
-- [ ] Suppress NewVersion toast while recording.
-- [ ] Never putRecord a note.
-
-## Wrap-up
-
-- [x] README macroplan: "Studio — capture to link" marked delivered (2026-08-17) + learning.
-- [x] docs/handover/slice-4-studio.md written (slice-2 style, honest about runtime-pending + deltas).
-- [ ] Commit StudioView.vue (double-publish guard + take preview) — still uncommitted.
-- [ ] Runtime acceptance on real browser + mic + iOS (blob measures -16 ±1 LUFS, note round-trip).
+- [ ] Chapter markers — `projectChapterToTimeline` works, nothing drops a marker yet.
+- [ ] Move the render to a Worker (still synchronous).
+- [ ] Recover-session reconcile-on-open banner (`listTakePaths` + `checkQuota` exist).
+- [ ] EDL persistence in IndexedDB behind a comlink Worker.
+- [ ] Bare split (no reject) for cue insertion points.
+- [ ] Per-clip best-of-N in the UI (`setClipMuted` exists and is tested; the UI works per take).
+- [ ] Cue track: `{kind:"file"}` and `{kind:"bed"}` clips, per-cue duck and fades, snap index
+      over flags / onsets / cut boundaries / clip boundaries. Generalise `assembleSpeech`.

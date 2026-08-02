@@ -147,6 +147,31 @@ export const planCuts = (silences: Silence[], options: Partial<PauseOptions> = {
   return cuts
 }
 
+/**
+ * The moments speech starts, in take seconds — every silence-to-speech transition, plus
+ * zero when the take opens on a voice. Derush snaps to these (a rejected region should
+ * begin where a line began, not 80 ms before it) and slice 6's cue placement will too.
+ * Derived from the same envelope as the silences, so the two overlays never disagree.
+ */
+export const speechOnsets = (
+  samples: Float32Array,
+  sampleRate: number,
+  options: Partial<PauseOptions> = {},
+): number[] => {
+  if (samples.length === 0) return []
+  const silences = detectSilences(samples, sampleRate, options)
+  const totalSec = samples.length / sampleRate
+
+  const onsets: number[] = []
+  if (!silences.some((s) => s.startSec <= 0)) onsets.push(0)
+  for (const s of silences) {
+    // A trailing silence never resumes, so its end is the end of the take, not an onset.
+    if (s.endSec >= totalSec) continue
+    onsets.push(s.endSec)
+  }
+  return onsets
+}
+
 /** A kept span of the take, between cuts. */
 export interface KeptRegion {
   inSec: number

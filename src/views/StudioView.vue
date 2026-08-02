@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, onMounted, ref, shallowRef, watch } from "vue"
 
+import DerushPanel from "../components/studio/DerushPanel.vue"
 import { useSession } from "../composables/useSession"
 import { useTakeRecorder } from "../composables/useTakeRecorder"
 import {
@@ -8,10 +9,16 @@ import {
   recordingAltFor,
   type PublishedNote,
 } from "../modules/atproto/publishedNotes"
-import type { Take } from "../modules/studio/edl.types"
+import type { TakePcm } from "../modules/studio/assemble"
+import { analyzeTakeFile, type TakeAnalysis } from "../modules/studio/analyzeTake"
+import { addTake, newSession, timelineDurationSec } from "../modules/studio/edl"
+import type { Session } from "../modules/studio/edl.types"
+import { SESSION_SAMPLE_RATE } from "../modules/studio/edl.types"
+import { canUndo as historyCanUndo, commit, historyOf, undo } from "../modules/studio/history"
 import { canEncodeOpus } from "../modules/studio/mediaCodec"
+import { deletePeaks, writePeaks } from "../modules/studio/opfsPeaks"
 import { deleteTake, readTakeFile } from "../modules/studio/opfsTakes"
-import { publishTake } from "../modules/studio/publishTake"
+import { publishSession } from "../modules/studio/publishSession"
 import { formatDuration } from "../utils/formatDuration"
 
 const { isLoggedIn, handle, did } = useSession()
@@ -25,8 +32,23 @@ const notesError = ref<string | null>(null)
 const loadingNotes = ref(false)
 
 const title = ref("")
-const take = ref<Take | null>(null)
-const removePauses = ref(true)
+
+// The EDL is the state of the studio now, and the undo stack is a list of past EDLs — the
+// review pass edits it, publish just renders whatever it says. Held shallow on purpose:
+// its snapshots are plain objects and Vue has no reason to walk into every clip.
+const sessionId = `session-${Date.now()}`
+const history = shallowRef(historyOf(newSession(sessionId, "")))
+const session = computed<Session>(() => history.value.present)
+const canUndo = computed(() => historyCanUndo(history.value))
+const edit = (next: Session) => (history.value = commit(history.value, next))
+
+// Decoded samples and the analysis overlays, by take id. Neither is reactive per-element:
+// these are megabytes of Float32Array, and only ever swapped wholesale.
+const takePcm: TakePcm = {}
+const analyses = shallowRef<Record<string, TakeAnalysis>>({})
+const selectedTakeId = ref("")
+const analysing = ref(false)
+const takeWarning = ref<string | null>(null)
 
 type PublishState = "idle" | "publishing" | "done" | "error"
 const publishState = ref<PublishState>("idle")
@@ -34,20 +56,7 @@ const link = ref("")
 const publishError = ref<string | null>(null)
 const copied = ref(false)
 
-// A local preview of the recorded take, so you can hear it before publishing. The studio
-// has no player of its own beyond this (playback lives on the note page / slice 7).
-const previewUrl = ref<string | null>(null)
-const revokePreview = () => {
-  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
-  previewUrl.value = null
-}
-watch(take, async (current) => {
-  revokePreview()
-  if (!current) return
-  const file = await readTakeFile(current.opfsPath)
-  if (file) previewUrl.value = URL.createObjectURL(file)
-})
-onBeforeUnmount(revokePreview)
+const hasProgramme = computed(() => timelineDurationSec(session.value) > 0)
 
 const loadNotes = async () => {
   if (!did.value) return
@@ -76,44 +85,70 @@ const pickNote = (note: PublishedNote) => {
 }
 
 const startRecording = async () => {
-  take.value = null
   publishState.value = "idle"
   link.value = ""
+  takeWarning.value = null
   await recorder.start()
 }
 
+/**
+ * Stop, then run the one decode the rest of the session lives off: peaks for the waveform,
+ * pause candidates, speech onsets and a loudness reading, plus the samples publish would
+ * otherwise decode a second time. The take is appended either way — a take that failed to
+ * analyse is still a take, and losing it to a decoder hiccup would be unforgivable.
+ */
 const stopRecording = async () => {
-  take.value = await recorder.stop()
+  const take = await recorder.stop()
+  if (!take) return
+
+  analysing.value = true
+  const file = await readTakeFile(take.opfsPath)
+  const analyzed = file ? await analyzeTakeFile(file, SESSION_SAMPLE_RATE) : null
+  analysing.value = false
+
+  if (!analyzed) {
+    takeWarning.value = "That take could not be analysed, so it has no waveform. It is still here."
+    edit(addTake(session.value, take, `${take.id}:0`))
+    selectedTakeId.value = take.id
+    return
+  }
+
+  const { samples, durationSec, ...analysis } = analyzed
+  takePcm[take.id] = samples
+  analyses.value = { ...analyses.value, [take.id]: analysis }
+
+  const peaksPath = await writePeaks(take.id, analysis.peaks).catch(() => "")
+  edit(addTake(session.value, { ...take, durationSec, peaksPath }, `${take.id}:0`))
+  selectedTakeId.value = take.id
 }
 
-const discardTake = async () => {
-  if (take.value) await deleteTake(take.value.opfsPath)
-  take.value = null
+/** Free every take's bytes and start from an empty EDL. */
+const resetSession = async () => {
+  for (const take of session.value.takes) {
+    await deleteTake(take.opfsPath)
+    await deletePeaks(take.peaksPath)
+    delete takePcm[take.id]
+  }
+  history.value = historyOf(newSession(`session-${Date.now()}`, ""))
+  analyses.value = {}
+  selectedTakeId.value = ""
   publishState.value = "idle"
   link.value = ""
-}
-
-// After a successful publish this take is spent — free its OPFS bytes (publish is the
-// durability boundary) and start fresh rather than letting the same audio publish twice.
-const startNewRecording = async () => {
-  if (take.value) await deleteTake(take.value.opfsPath)
-  take.value = null
-  publishState.value = "idle"
-  link.value = ""
+  takeWarning.value = null
 }
 
 const publish = async () => {
-  if (!take.value || !did.value) return
+  if (!did.value || !hasProgramme.value) return
   // Guard against a double publish: only from idle or after a prior error, never re-run
   // while publishing or once already done (that would create a duplicate recording).
   if (publishState.value === "publishing" || publishState.value === "done") return
   publishState.value = "publishing"
   publishError.value = null
-  const result = await publishTake({
+  const result = await publishSession({
     did: did.value,
-    take: take.value,
+    session: session.value,
     title: title.value || "Untitled",
-    removePauses: removePauses.value,
+    takePcm,
   })
   if (result.ok) {
     link.value = result.link
@@ -200,51 +235,59 @@ const copyLink = async () => {
                 formatDuration(recorder.elapsedSec.value) ?? "0:00"
               }}</span>
               <template v-if="!recorder.isRecording.value">
-                <button class="btn primary" @click="startRecording">Record</button>
+                <button class="btn primary" :disabled="analysing" @click="startRecording">
+                  {{ session.takes.length ? "Record another take" : "Record" }}
+                </button>
+                <span v-if="analysing" class="flag-count mono">Analysing the take…</span>
               </template>
               <template v-else>
-                <button class="btn" @click="recorder.flag('mark')">Flag ▹</button>
-                <button class="btn" @click="recorder.flag('retake')">Bad take ✕</button>
+                <button class="btn" title="F" @click="recorder.flag('mark')">Flag ▹ (F)</button>
+                <button class="btn" title="R" @click="recorder.flag('retake')">
+                  Bad take ✕ (R)
+                </button>
                 <button class="btn primary" @click="stopRecording">Stop</button>
                 <span class="flag-count mono">{{ recorder.flags.value.length }} flags</span>
               </template>
             </div>
 
             <p v-if="recorder.error.value" class="error">{{ recorder.error.value }}</p>
+            <p v-else-if="takeWarning" class="error">{{ takeWarning }}</p>
           </div>
 
-          <!-- Review + publish -->
-          <div v-if="take" class="review">
-            <p class="review-head mono">
-              Take: {{ formatDuration(take.durationSec) }} · {{ take.flags.length }} flags
-            </p>
+          <!-- Derush: the review pass over the EDL -->
+          <DerushPanel
+            v-if="session.takes.length && publishState !== 'done'"
+            v-model:selected-take-id="selectedTakeId"
+            :session="session"
+            :analyses="analyses"
+            :can-undo="canUndo"
+            @edit="edit"
+            @undo="history = undo(history)"
+          />
 
-            <!-- Local preview of the raw take, so you can hear it before publishing. -->
-            <audio v-if="previewUrl" class="preview" :src="previewUrl" controls />
-
+          <!-- Publish -->
+          <div v-if="session.takes.length" class="review">
             <template v-if="publishState !== 'done'">
-              <label class="check">
-                <input v-model="removePauses" type="checkbox" />
-                Trim head/tail and remove long pauses
-              </label>
-
               <div class="review-actions">
                 <button
                   class="btn primary"
-                  :disabled="publishState === 'publishing'"
+                  :disabled="publishState === 'publishing' || !hasProgramme"
                   @click="publish"
                 >
                   {{ publishState === "publishing" ? "Rendering…" : "Render & publish" }}
                 </button>
-                <button class="btn" :disabled="publishState === 'publishing'" @click="discardTake">
-                  Discard
+                <button class="btn" :disabled="publishState === 'publishing'" @click="resetSession">
+                  Discard everything
                 </button>
               </div>
 
+              <p v-if="!hasProgramme" class="review-head mono">
+                Every region is rejected or muted — there is nothing to render.
+              </p>
               <p v-if="publishState === 'error'" class="error">{{ publishError }}</p>
             </template>
 
-            <!-- Published: the take is spent. Offer the link and a fresh recording, never a
+            <!-- Published: this cut is spent. Offer the link and a fresh session, never a
                  second publish of the same audio. -->
             <div v-else class="published">
               <p class="mono done-label">Published. Paste this into your note:</p>
@@ -253,7 +296,7 @@ const copyLink = async () => {
                 <button class="btn primary" @click="copyLink">
                   {{ copied ? "Copied ✓" : "Copy link" }}
                 </button>
-                <button class="btn" @click="startNewRecording">Start a new recording</button>
+                <button class="btn" @click="resetSession">Start a new recording</button>
               </div>
             </div>
           </div>
@@ -424,10 +467,6 @@ const copyLink = async () => {
 .review-head {
   margin: 0 0 0.75rem;
   color: var(--hw-ink-faint);
-}
-.preview {
-  width: 100%;
-  margin: 0 0 1rem;
 }
 .check {
   display: flex;

@@ -83,6 +83,8 @@ learning = "Built pure-core-first: the EDL, the windowed render chain (HPF + pre
 name = "Derush"
 start = 2026-09-14
 original = 2026-10-05
+delivered = 2026-09-14
+learning = "Slice 4's bet paid: derush is UI over an EDL that already rendered, so the whole pass is pure functions (derush.ts) plus two components, and undo is a list of past EDLs rather than inverse operations. Two design calls worth keeping. Everything the review UI touches is expressed in take seconds, never timeline seconds — a flag stamped at capture, a pause candidate found afterwards and a waveform column all line up under every later edit, and the ripple stays an implementation detail of one relayout function. And the one-button tap/double-tap flag from the plan was dropped for two buttons plus F and R: a double-tap cannot resolve until its window expires, so the mark lands late, and a second tap that misses the window silently becomes two marks — in the one moment of a session where you have no attention to check. One decode per take now feeds peaks, pause candidates, speech onsets and a loudness reading, and the samples stay in memory so publish does not decode a second time. Watch the bundler: a lowercase `select` token anywhere in a source file makes Tailwind emit daisyUI's whole .select component, 8.5 kB of CSS for an event name."
 
 [[feature]]
 name = "Cue track — music, sounds, ambient"

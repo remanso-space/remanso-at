@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { detectSilences, keptRegions, planCuts, rmsEnvelopeDb, type Silence } from "./pauses"
+import {
+  detectSilences,
+  keptRegions,
+  planCuts,
+  rmsEnvelopeDb,
+  speechOnsets,
+  type Silence,
+} from "./pauses"
 
 const SR = 48_000
 
@@ -159,5 +166,31 @@ describe("planCuts", () => {
     expect(cuts[1].endSec).toBeCloseTo(3.2, 1)
     // tail removed fully
     expect(cuts[2].endSec).toBeCloseTo(5.2, 1)
+  })
+})
+
+describe("speechOnsets", () => {
+  it("marks zero when the take opens on a voice", () => {
+    const onsets = speechOnsets(concat(seg(1, SPEECH), seg(1, QUIET), seg(1, SPEECH)), SR)
+
+    expect(onsets[0]).toBe(0)
+    expect(onsets[1]).toBeCloseTo(2, 1)
+  })
+
+  it("does not mark zero when the take opens on silence", () => {
+    const onsets = speechOnsets(concat(seg(1, QUIET), seg(1, SPEECH)), SR)
+
+    expect(onsets).toHaveLength(1)
+    expect(onsets[0]).toBeCloseTo(1, 1)
+  })
+
+  it("ignores the trailing silence, which never resumes", () => {
+    const onsets = speechOnsets(concat(seg(1, SPEECH), seg(1, QUIET)), SR)
+
+    expect(onsets).toEqual([0])
+  })
+
+  it("returns nothing for an empty take", () => {
+    expect(speechOnsets(new Float32Array(0), SR)).toEqual([])
   })
 })

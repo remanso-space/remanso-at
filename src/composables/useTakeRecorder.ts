@@ -72,6 +72,24 @@ export const useTakeRecorder = () => {
     event.returnValue = ""
   }
 
+  // Two flags, two keys, no timing. The plan proposed one button with tap = mark and
+  // double-tap = retake; the double-tap loses. It cannot resolve a tap until the window
+  // expires, so the mark you feel you placed lands late, and a second tap that misses the
+  // window silently becomes two marks — in the one moment of the session where you have
+  // no attention to spare for checking. Two targets cost one more button and are
+  // unambiguous at any speed. F marks, R condemns the line just said.
+  const onFlagKey = (event: KeyboardEvent) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return
+    const target = event.target as HTMLElement | null
+    if (target?.isContentEditable) return
+    if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return
+
+    const key = event.key.toLowerCase()
+    if (key !== "f" && key !== "r") return
+    event.preventDefault()
+    flag(key === "f" ? "mark" : "retake")
+  }
+
   const tick = () => {
     elapsedSec.value = (performance.now() - startedAt) / 1000
     if (analyser) {
@@ -183,11 +201,12 @@ export const useTakeRecorder = () => {
     isRecording.value = true
     setRecording(true)
     window.addEventListener("beforeunload", onBeforeUnload)
+    window.addEventListener("keydown", onFlagKey)
     raf = requestAnimationFrame(tick)
     return true
   }
 
-  /** tap = mark, double-tap (kind "retake") = that line was bad. Appended at take time. */
+  /** F = mark this spot, R = that line was bad. Appended at take time, never timeline time. */
   const flag = (kind: Marker["kind"] = "mark") => {
     if (!isRecording.value) return
     flags.value = [...flags.value, { atTakeSec: elapsedSec.value, kind }]
@@ -232,6 +251,7 @@ export const useTakeRecorder = () => {
   const teardown = async () => {
     cancelAnimationFrame(raf)
     window.removeEventListener("beforeunload", onBeforeUnload)
+    window.removeEventListener("keydown", onFlagKey)
     stream?.getTracks().forEach((t) => t.stop())
     if (audioContext) await audioContext.close().catch(() => {})
     stream = null
