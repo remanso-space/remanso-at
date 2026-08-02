@@ -7,11 +7,11 @@ Deployed at https://remanso.at
 Sibling to [remanso.space](https://remanso.space), which is the writing tool. This is the other half
 of the pair: what happens to a note once it is public.
 
-| Route | What |
-| --- | --- |
-| `/listen` | Published `space.remanso.note` records from the [appview](https://api.remanso.space), rendered plainly. remanso.space stays canonical for `/pub/…` URLs; this reader links back with `rel="canonical"`. |
-| `/studio` | Multi-take capture, derush, non-destructive trim, a post-production chain, and spot-placed music or ambient cues. Publishes a `space.remanso.recording` and hands you the markdown link to paste into a `.pub.md` note. |
-| `/ambient` | Procedurally generated beds. Nothing is sampled, so there is nothing to license and no loop seams. |
+| Route      | What                                                                                                                                                                                                                    |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/listen`  | Published `space.remanso.note` records from the [appview](https://api.remanso.space), rendered plainly. remanso.space stays canonical for `/pub/…` URLs; this reader links back with `rel="canonical"`.                 |
+| `/studio`  | Multi-take capture, derush, non-destructive trim, a post-production chain, and spot-placed music or ambient cues. Publishes a `space.remanso.recording` and hands you the markdown link to paste into a `.pub.md` note. |
+| `/ambient` | Procedurally generated beds. Nothing is sampled, so there is nothing to license and no loop seams.                                                                                                                      |
 
 ## Why the studio hands you a link
 
@@ -156,11 +156,11 @@ push   git@github.com:remanso-space/remanso-at.git
 
 ## Related
 
-| | |
-| --- | --- |
-| [remanso.space](https://remanso.space) | the writing tool ([repo](https://git.apoena.dev/remanso-space/remanso)) |
-| [api.remanso.space](https://api.remanso.space) | appview over the `space.remanso.note` firehose |
-| [remanso-cli](https://github.com/remanso-space/remanso-cli) | publishes `*.pub.md` to the PDS |
+|                                                             |                                                                         |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [remanso.space](https://remanso.space)                      | the writing tool ([repo](https://git.apoena.dev/remanso-space/remanso)) |
+| [api.remanso.space](https://api.remanso.space)              | appview over the `space.remanso.note` firehose                          |
+| [remanso-cli](https://github.com/remanso-space/remanso-cli) | publishes `*.pub.md` to the PDS                                         |
 
 Lexicons are owned by
 [remanso-jetstream](https://git.apoena.dev/julien/remanso-jetstream): `space.remanso.note` and

@@ -1,0 +1,80 @@
+/* The font @import MUST be the first line, before @import "tailwindcss".
+   Tailwind inlines its own import into real rules, and per the CSS spec @import must
+   precede all other rules, so a font import placed second is dropped by the build
+   (with an "@import must precede all rules" warning) and the font never loads. */
+@import url("https://api.fonts.coollabs.io/css2?display=swap&family=Libertinus+Serif:ital,wght@0,400;0,700;1,400&family=Courier+Prime:wght@400;700");
+@import "tailwindcss";
+@plugin "daisyui";
+
+/* Overriding the built-in "light" theme rather than defining a new one, so the palette
+   reaches both Tailwind utilities (bg-primary) and DaisyUI components (btn-primary).
+   Setting these in @theme alone would only cover the utilities. */
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  --color-base-100: #fdfcfa;
+  --color-base-200: #f5f2ec;
+  --color-base-300: #e8e3d9;
+  --color-base-content: #1f1b18;
+  --color-primary: #e36598;
+  --color-primary-content: #ffffff;
+  --color-secondary: #6b8e4e;
+  --color-secondary-content: #ffffff;
+  --radius-box: 2px;
+  --radius-field: 2px;
+  --radius-selector: 2px;
+}
+
+@theme {
+  --font-sans: "Libertinus Serif", "Iowan Old Style", Palatino, serif;
+  --font-mono: "Courier Prime", "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* Shared vocabulary with remanso.space, kept as its own token layer so the two apps can
+   drift in markup while still reading as one thing. Mirrors the --hw-* block in that
+   repo's WelcomeWorld.vue; changes here should be reflected there. */
+:root {
+  --hw-pink: #e36598;
+  --hw-leaf: #6b8e4e;
+  --hw-ink: #1f1b18;
+  --hw-ink-soft: color-mix(in oklch, var(--hw-ink) 68%, var(--color-base-100));
+  --hw-ink-faint: color-mix(in oklch, var(--hw-ink) 45%, var(--color-base-100));
+  --hw-rule: color-mix(in oklch, var(--hw-ink) 14%, var(--color-base-100));
+  --hw-paper: #fdfcfa;
+  --hw-paper-warm: #f5f2ec;
+
+  /* Raw accent values fail contrast as text. remanso.space solves this with --link-accent:
+     keep hue and chroma, re-pin lightness. ~5.8:1 instead of 1.17:1. */
+  --link-accent: oklch(from var(--hw-pink) 48% c h);
+}
+
+html {
+  background: var(--hw-paper);
+}
+
+body {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--link-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Section labels typeset as "§ 01 — ..." in mono, matching remanso.space. */
+.hw-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hw-ink-faint);
+}
