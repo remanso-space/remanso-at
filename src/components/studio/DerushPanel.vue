@@ -16,7 +16,12 @@ import {
   setTakeMuted,
   soloTake,
 } from "../../modules/studio/derush"
-import { timelineDurationSec } from "../../modules/studio/edl"
+import {
+  addChapter,
+  projectChapterToTimeline,
+  removeChapter,
+  timelineDurationSec,
+} from "../../modules/studio/edl"
 import type { Session, Take } from "../../modules/studio/edl.types"
 import { readTakeFile } from "../../modules/studio/opfsTakes"
 import { formatDuration } from "../../utils/formatDuration"
@@ -206,6 +211,24 @@ const toggleMute = (take: Take) =>
 
 const solo = (take: Take) => emit("edit", soloTake(props.session, take.id))
 
+// ── chapters ──────────────────────────────────────────────────────────────────────────
+// A chapter is dropped against the take at the playhead, in take seconds, so it rides
+// through every later edit and projects to the timeline at render — and doubles as a cue
+// snap target.
+
+const dropChapter = () => {
+  const take = selectedTake.value
+  if (!take) return
+  emit("edit", addChapter(props.session, { takeId: take.id, atTakeSec: playheadSec.value }))
+}
+
+const chapters = computed(() =>
+  props.session.chapters.map((c, i) => ({
+    index: i,
+    atTimelineSec: projectChapterToTimeline(props.session, c),
+  })),
+)
+
 // ── keyboard ────────────────────────────────────────────────────────────────────────
 
 const FORM_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"])
@@ -253,6 +276,9 @@ const onKeydown = (event: KeyboardEvent) => {
       break
     case "]":
       jumpFlag(1)
+      break
+    case "c":
+      dropChapter()
       break
     default:
       return
@@ -399,8 +425,32 @@ const lufsLabel = (takeId: string): string => {
         </li>
       </ul>
 
+      <!-- Chapters: a mark against the take at the playhead; a cue snap target too -->
+      <div class="chapters">
+        <button
+          class="btn"
+          data-test="drop-chapter"
+          title="C — drop a chapter here"
+          @click="dropChapter"
+        >
+          Drop chapter (C)
+        </button>
+        <ul v-if="chapters.length" class="chapter-list">
+          <li v-for="ch in chapters" :key="ch.index" class="chapter">
+            <span class="mono">
+              §{{ ch.index + 1 }} ·
+              {{ ch.atTimelineSec === null ? "cut" : (formatDuration(ch.atTimelineSec) ?? "0:00") }}
+            </span>
+            <button class="btn tiny danger" @click="emit('edit', removeChapter(session, ch.index))">
+              Remove
+            </button>
+          </li>
+        </ul>
+      </div>
+
       <p class="keys mono">
-        space play · J K L shuttle · I O in/out · X reject · [ ] jump flags · ⌘/ctrl Z undo
+        space play · J K L shuttle · I O in/out · X reject · [ ] jump flags · C chapter · ⌘/ctrl Z
+        undo
       </p>
     </template>
   </div>
@@ -536,6 +586,22 @@ const lufsLabel = (takeId: string): string => {
   cursor: pointer;
   font-size: 0.78rem;
   color: var(--hw-pink-deep);
+}
+.chapters {
+  margin-top: 0.9rem;
+}
+.chapter-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.chapter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.78rem;
+  color: var(--hw-ink-soft);
 }
 .keys {
   margin: 0.9rem 0 0;

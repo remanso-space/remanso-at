@@ -56,3 +56,20 @@ but does nothing about a sibling with a higher `z-index`. Any new fixed overlay 
 an explicit `z-index` above 1.
 
 (The two side fixes were real defects and are covered by tests, but neither was this bug.)
+
+---
+
+2026-08-02 (slice 6). The cue-track panel pushed the main CSS bundle from 69.89 kB to 72.49 kB.
+I already knew the slice-4 rule — a lowercase `select` token makes Tailwind emit daisyUI's whole
+`.select` component — but I read it as being about class names and event names, and I chased the
+`<input>` element and a bare `input` identifier before finding the real culprit: the word
+**`dropdown` in a code comment**. Tailwind scans comments too, so `.dropdown` (2.6 kB) shipped for
+a sentence describing the UI. Renaming the word restored the byte-identical 69.89 kB bundle.
+
+**How to apply:** the daisyUI-token trap is wider than a class name. Keep component words
+(`dropdown`, `menu`, `select`, `input`, `card`, `range`, `steps`, `tab`, `modal`, `drawer`, …) out
+of source **entirely — comments included**. After adding any component, diff the built CSS: grep
+`dist/assets/index-*.css` for `\.(dropdown|menu|select|card|…)\{` and confirm the set matches the
+baseline, not just the byte size. And measure a true baseline with `git stash -u` (untracked new
+files included) before blaming a change — my first "baseline" build left the new untracked modules
+on disk and told me nothing.

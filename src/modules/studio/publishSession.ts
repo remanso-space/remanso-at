@@ -1,12 +1,13 @@
 import { recordingMarkdownLink } from "../atproto/publishedNotes"
 import { uploadRecording } from "../atproto/uploadRecording"
-import { renderSession, type TakePcm } from "./assemble"
-import { speechTrack, timelineDurationSec } from "./edl"
+import { renderSession, type CuePcm, type TakePcm } from "./assemble"
+import { cueTrack, speechTrack, timelineDurationSec } from "./edl"
 import type { Session } from "./edl.types"
 import { SESSION_SAMPLE_RATE } from "./edl.types"
-import { encodeOpus } from "./mediaCodec"
+import { contentTier, decodeTakeToMono, encodeOpus } from "./mediaCodec"
 import { analyzeTakeFile } from "./analyzeTake"
 import { readTakeFile } from "./opfsTakes"
+import { readCueFile } from "./opfsCues"
 
 // The end of the line: render whatever the EDL currently says, encode it to Opus,
 // uploadBlob + createRecord, and hand back the copyable markdown link. Never writes a
@@ -42,6 +43,16 @@ const takeIdsInUse = (session: Session): Set<string> => {
   return ids
 }
 
+/** OPFS paths of the imported cue files the timeline still plays. Beds need no decode. */
+const cuePathsInUse = (session: Session): Set<string> => {
+  const paths = new Set<string>()
+  for (const clip of cueTrack(session)?.clips ?? []) {
+    if (clip.muted) continue
+    if (clip.source.kind === "file") paths.add(clip.source.opfsPath)
+  }
+  return paths
+}
+
 export const publishSession = async ({
   did,
   session,
@@ -65,7 +76,18 @@ export const publishSession = async ({
     pcm[takeId] = analyzed.samples
   }
 
-  const rendered = renderSession(session, pcm, SESSION_SAMPLE_RATE)
+  // Imported cue files are decoded to mono at the session rate, the same as takes; beds are
+  // rendered inside the assembler and need nothing here.
+  const cuePcm: CuePcm = {}
+  for (const path of cuePathsInUse(session)) {
+    const file = await readCueFile(path)
+    if (!file) return { ok: false, error: "A cue file could not be read back from storage." }
+    const decoded = await decodeTakeToMono(file, SESSION_SAMPLE_RATE)
+    if (!decoded) return { ok: false, error: "A cue file could not be decoded." }
+    cuePcm[path] = decoded.samples
+  }
+
+  const rendered = renderSession(session, pcm, SESSION_SAMPLE_RATE, cuePcm)
   if (rendered.samples.length === 0) {
     return { ok: false, error: "The render came out empty." }
   }
@@ -75,6 +97,7 @@ export const publishSession = async ({
     SESSION_SAMPLE_RATE,
     rendered.durationSec,
     `${title || "episode"}.weba`,
+    contentTier(session),
   )
   if (!encoded) return { ok: false, error: "Opus encoding failed." }
 

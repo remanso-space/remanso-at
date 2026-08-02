@@ -1,5 +1,5 @@
 import { TARGET_LUFS } from "../../utils/loudness"
-import type { Chapter, ChainSettings, Clip, Session, Take, Track } from "./edl.types"
+import type { BedId, Chapter, ChainSettings, Clip, Session, Take, Track } from "./edl.types"
 import { SESSION_SAMPLE_RATE } from "./edl.types"
 
 // Pure operations over the EDL. Every edit returns a new object; nothing mutates a
@@ -35,6 +35,16 @@ export const newSession = (id: string, title: string): Session => ({
 
 export const speechTrack = (session: Session): Track =>
   session.tracks.find((t) => t.kind === "speech")!
+
+/** The cue track. Undefined only on a malformed session — newSession always makes both. */
+export const cueTrack = (session: Session): Track | undefined =>
+  session.tracks.find((t) => t.kind === "cue")
+
+/** Whether the cue track carries any non-muted clip — drives the two-stage render and bitrate. */
+export const hasCueClips = (session: Session): boolean => {
+  const track = cueTrack(session)
+  return !!track && track.clips.some((c) => !c.muted)
+}
 
 export const clipDurationSec = (clip: Clip): number => clip.outSec - clip.inSec
 
@@ -112,19 +122,162 @@ export const splitClipAt = (
   return [left, right]
 }
 
+// —— The cue track (slice 6): music, sounds, procedural ambient ——
+
+/** A bed's default gain: 14 dB down, so it sits under the -16 LUFS speech programme. */
+export const DEFAULT_BED_GAIN_DB = -14
+
 /**
- * Project a chapter's take-relative time onto the rendered timeline. Walks the speech
- * clips cut from that take and finds the one whose source window contains the mark;
- * returns null when the mark landed in audio a trim or pause-removal took out. This is
- * why chapters are stored as {takeId, atTakeSec} and never as timeline seconds — they
- * survive every edit for free.
+ * Fades that suit a clip's length. A long bed opens and closes slowly (2 s in, 4 s out);
+ * a short sting keeps ~30 ms so a 2 s fade does not swallow a half-second sound. Neither
+ * fade may exceed half the clip.
  */
-export const projectChapterToTimeline = (session: Session, chapter: Chapter): number | null => {
+export const defaultFades = (durationSec: number): { fadeInSec: number; fadeOutSec: number } => {
+  const half = durationSec / 2
+  if (durationSec < 5) {
+    const f = Math.min(0.03, half)
+    return { fadeInSec: f, fadeOutSec: f }
+  }
+  return { fadeInSec: Math.min(2, half), fadeOutSec: Math.min(4, half) }
+}
+
+const withCueClip = (session: Session, clip: Clip): Session => ({
+  ...session,
+  tracks: session.tracks.map((t) => (t.kind === "cue" ? { ...t, clips: [...t.clips, clip] } : t)),
+})
+
+/**
+ * Place a procedural bed on the cue track at `atSec` for `lengthSec`. Ducks under speech
+ * by default and opens/closes on long fades — a bed is the floor a scene sits on, not an
+ * event. `inSec` indexes into the bed's infinite stream, so a seed fixes the exact audio.
+ */
+export const addBedClip = (
+  session: Session,
+  params: { bedId: BedId; seed: number; atSec: number; lengthSec: number },
+  clipId: string,
+): Session => {
+  const fades = defaultFades(params.lengthSec)
+  return withCueClip(session, {
+    id: clipId,
+    source: { kind: "bed", bedId: params.bedId, seed: params.seed },
+    inSec: 0,
+    outSec: params.lengthSec,
+    atSec: params.atSec,
+    gainDb: DEFAULT_BED_GAIN_DB,
+    fadeInSec: fades.fadeInSec,
+    fadeOutSec: fades.fadeOutSec,
+    duck: "under-speech",
+  })
+}
+
+/**
+ * Place an imported music/sound file on the cue track at `atSec`. Fades default to the
+ * clip's length; ducking is off (a placed sting lands in a gap) and opted into per clip.
+ */
+export const addCueFileClip = (
+  session: Session,
+  params: { opfsPath: string; atSec: number; durationSec: number },
+  clipId: string,
+): Session => {
+  const fades = defaultFades(params.durationSec)
+  return withCueClip(session, {
+    id: clipId,
+    source: { kind: "file", opfsPath: params.opfsPath },
+    inSec: 0,
+    outSec: params.durationSec,
+    atSec: params.atSec,
+    gainDb: 0,
+    fadeInSec: fades.fadeInSec,
+    fadeOutSec: fades.fadeOutSec,
+    duck: "none",
+  })
+}
+
+/**
+ * Lay a low room-tone bed under the whole programme, from the same engine. Below -55 dBFS
+ * it is inaudible under speech and noticed only where it fills a pause cut's dead-silent
+ * seam — which is the point. Added once, spanning the current timeline; not ducked, since
+ * a room tone that ducks itself away in the gaps defeats its own purpose.
+ */
+export const addRoomToneFill = (session: Session, seed: number, clipId: string): Session => {
+  const lengthSec = timelineDurationSec(session)
+  if (lengthSec <= 0) return session
+  return withCueClip(session, {
+    id: clipId,
+    source: { kind: "bed", bedId: "roomTone", seed },
+    inSec: 0,
+    outSec: lengthSec,
+    atSec: 0,
+    gainDb: 0,
+    fadeInSec: 0.1,
+    fadeOutSec: 0.1,
+    duck: "none",
+  })
+}
+
+const mapCueClips = (session: Session, fn: (clip: Clip) => Clip): Session => ({
+  ...session,
+  tracks: session.tracks.map((t) => (t.kind === "cue" ? { ...t, clips: t.clips.map(fn) } : t)),
+})
+
+/** Mute or unmute a single cue clip (best-of-N on the cue track, or silencing a bed). */
+export const setCueClipMuted = (session: Session, clipId: string, muted: boolean): Session =>
+  mapCueClips(session, (c) => (c.id === clipId ? { ...c, muted } : c))
+
+/** Toggle whether a cue ducks under speech. A sting in a gap wants `none`; a bed wants it on. */
+export const setCueClipDuck = (
+  session: Session,
+  clipId: string,
+  duck: "none" | "under-speech",
+): Session => mapCueClips(session, (c) => (c.id === clipId ? { ...c, duck } : c))
+
+/** Set a cue clip's gain in dB. */
+export const setCueClipGainDb = (session: Session, clipId: string, gainDb: number): Session =>
+  mapCueClips(session, (c) => (c.id === clipId ? { ...c, gainDb } : c))
+
+/** Remove a cue clip from the cue track. */
+export const removeCueClip = (session: Session, clipId: string): Session => ({
+  ...session,
+  tracks: session.tracks.map((t) =>
+    t.kind === "cue" ? { ...t, clips: t.clips.filter((c) => c.id !== clipId) } : t,
+  ),
+})
+
+// —— Chapters (slice 6): a marker dropped against a take, projected at render ——
+
+/** Drop a chapter marker at a take-relative time. Stored in take seconds — survives edits. */
+export const addChapter = (session: Session, chapter: Chapter): Session => ({
+  ...session,
+  chapters: [...session.chapters, chapter].sort((a, b) => a.atTakeSec - b.atTakeSec),
+})
+
+/** Remove the chapter at `index` (its position in `session.chapters`). */
+export const removeChapter = (session: Session, index: number): Session => ({
+  ...session,
+  chapters: session.chapters.filter((_, i) => i !== index),
+})
+
+/**
+ * Project a take-relative time onto the rendered timeline. Walks the speech clips cut from
+ * that take and finds the one whose source window contains the mark; returns null when the
+ * mark landed in audio a trim or pause-removal took out. This is why flags and chapters are
+ * stored in take seconds and never timeline seconds — they survive every edit for free, and
+ * the cue snap index projects them here.
+ */
+export const projectTakeTimeToTimeline = (
+  session: Session,
+  takeId: string,
+  atTakeSec: number,
+): number | null => {
   for (const clip of speechTrack(session).clips) {
-    if (clip.source.kind !== "take" || clip.source.takeId !== chapter.takeId) continue
-    if (chapter.atTakeSec >= clip.inSec && chapter.atTakeSec < clip.outSec) {
-      return clip.atSec + (chapter.atTakeSec - clip.inSec)
+    if (clip.source.kind !== "take" || clip.source.takeId !== takeId) continue
+    if (atTakeSec >= clip.inSec && atTakeSec < clip.outSec) {
+      return clip.atSec + (atTakeSec - clip.inSec)
     }
   }
   return null
 }
+
+/** Project a chapter's mark onto the timeline (a take-time projection by any other name). */
+export const projectChapterToTimeline = (session: Session, chapter: Chapter): number | null =>
+  projectTakeTimeToTimeline(session, chapter.takeId, chapter.atTakeSec)

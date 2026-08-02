@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from "vue"
 
+import CueTrackPanel from "../components/studio/CueTrackPanel.vue"
 import DerushPanel from "../components/studio/DerushPanel.vue"
 import { useSession } from "../composables/useSession"
 import { useTakeRecorder } from "../composables/useTakeRecorder"
@@ -271,6 +272,14 @@ const copyLink = async () => {
             :can-undo="canUndo"
             @edit="edit"
             @undo="history = undo(history)"
+          />
+
+          <!-- Cue track: music, sounds and procedural ambient under the speech -->
+          <CueTrackPanel
+            v-if="session.takes.length && publishState !== 'done'"
+            :session="session"
+            :analyses="analyses"
+            @edit="edit"
           />
 
           <!-- Publish -->

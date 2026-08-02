@@ -131,6 +131,16 @@ describe("DerushPanel", () => {
     ])
   })
 
+  it("drops a chapter against the take at the playhead on C", async () => {
+    const wrapper = mountPanel()
+
+    await seekTo(wrapper, 4)
+    await press("c")
+
+    const chapters = (wrapper.emitted("edit")!.at(-1)![0] as Session).chapters
+    expect(chapters).toEqual([{ takeId: "t1", atTakeSec: 4 }])
+  })
+
   it("asks for undo on ctrl-Z", async () => {
     const wrapper = mountPanel()
 

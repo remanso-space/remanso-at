@@ -44,13 +44,23 @@
 - [x] Gates at `3673269`: build clean, lint, fmt:check, **194 tests**. Live bundle
       `index-BletfXiY.js` matches the local build — deployed and verified.
 
-## Carried forward (slice 6+)
+## Slice 6 — cue track (delivered, code-complete, live-pending)
 
-- [ ] Chapter markers — `projectChapterToTimeline` works, nothing drops a marker yet.
+- [x] Procedural bed engine `beds.ts` — seeded pure function, windowed-equality asserted.
+- [x] Imported files (`cueImport.ts` verbatim MIME, `opfsCues.ts`), `{kind:"file"}` cues.
+- [x] Two-stage mix: chain over speech only, cues summed after, final limiter (`assemble.ts`).
+- [x] Per-cue duck (offline speech envelope, 300/800 ms) and equal-power fades (`duck.ts`).
+- [x] Snap index over clip boundaries / flags / onsets / chapters (`snap.ts`).
+- [x] Room-tone fill; chapters (drop on `C`, list); bitrate content tier surfaced.
+- [x] `CueTrackPanel.vue` + mounted spec; **257 tests**, build clean, CSS 69.89 kB no leak.
+- [ ] **Live-verify (browser gate):** beds heard, mix under real speech, file import + OPFS
+      quota, iOS Safari, the −16/−1 measurement over a published blob, `.pub.md` round trip.
+
+## Carried forward (slice 7+)
+
 - [ ] Move the render to a Worker (still synchronous).
-- [ ] Recover-session reconcile-on-open banner (`listTakePaths` + `checkQuota` exist).
+- [ ] Recover-session reconcile-on-open banner (`listTakePaths`/`listCuePaths` + `checkQuota`).
 - [ ] EDL persistence in IndexedDB behind a comlink Worker.
-- [ ] Bare split (no reject) for cue insertion points.
-- [ ] Per-clip best-of-N in the UI (`setClipMuted` exists and is tested; the UI works per take).
-- [ ] Cue track: `{kind:"file"}` and `{kind:"bed"}` clips, per-cue duck and fades, snap index
-      over flags / onsets / cut boundaries / clip boundaries. Generalise `assembleSpeech`.
+- [ ] Bare split (no reject) for cue insertion points; move a placed cue without remove-replace.
+- [ ] Per-clip best-of-N and a per-cue gain slider in the UI (`setClipMuted`/`setCueClipGainDb`
+      exist and are tested).

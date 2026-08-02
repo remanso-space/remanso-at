@@ -1,4 +1,6 @@
 import { MAX_RECORDING_BYTES } from "../atproto/recording.types"
+import { clipDurationSec, cueTrack, timelineDurationSec } from "./edl"
+import type { Session } from "./edl.types"
 import { downmixToMono, resampleLinear } from "./pcm"
 
 // The browser-coupled edges of the render: decode a recorded take to mono PCM at the
@@ -8,15 +10,56 @@ import { downmixToMono, resampleLinear } from "./pcm"
 // there is no original to fall back to — so it is checked at session start and refused
 // clearly. Unit tests cannot exercise WebCodecs in jsdom; this is verified in the app.
 
-const PREFERRED_BITRATE = 96_000
 const MIN_BITRATE = 32_000
 const SIZE_SAFETY = 0.9
 
-/** A bitrate that lands the encode under the 50 MB blob ceiling; mirrors normalizeAudioFile. */
-export const bitrateFor = (durationSec: number): number => {
-  if (durationSec <= 0) return PREFERRED_BITRATE
+/**
+ * What the cue track is carrying, which sets how much bitrate the encode wants. Speech-only
+ * Opus is transparent at 64 kbps; the odd sting barely moves it; a bed or music under the
+ * whole episode is broadband and asks for 128. Higher bitrate is fewer minutes under the
+ * 50 MB blob ceiling — the tension the studio surfaces once the cue track is populated.
+ */
+export type ContentTier = "speech" | "occasional-cue" | "music-heavy"
+
+const PREFERRED_BITRATE: Record<ContentTier, number> = {
+  speech: 64_000,
+  "occasional-cue": 96_000,
+  "music-heavy": 128_000,
+}
+
+/**
+ * A bitrate that lands the encode under the 50 MB blob ceiling, preferring the tier's
+ * target and dropping only when duration forces it. `tier` defaults to speech-only, so the
+ * slice-4 caller is unchanged.
+ */
+export const bitrateFor = (durationSec: number, tier: ContentTier = "speech"): number => {
+  const preferred = PREFERRED_BITRATE[tier]
+  if (durationSec <= 0) return preferred
   const budget = (MAX_RECORDING_BYTES * 8 * SIZE_SAFETY) / durationSec
-  return Math.max(MIN_BITRATE, Math.min(PREFERRED_BITRATE, Math.floor(budget)))
+  return Math.max(MIN_BITRATE, Math.min(preferred, Math.floor(budget)))
+}
+
+/** Minutes of audio the 50 MB ceiling allows at a tier's preferred bitrate. */
+export const minutesAtTier = (tier: ContentTier): number =>
+  Math.floor((MAX_RECORDING_BYTES * 8 * SIZE_SAFETY) / PREFERRED_BITRATE[tier] / 60)
+
+/**
+ * The tier the cue track puts the encode in. No audible cue → speech. A room-tone fill is
+ * ignored (it is an inaudible floor, not music), so laying one down does not cost bitrate.
+ * A few short cues covering little of the timeline → occasional-cue; a bed or music file
+ * under most of it → music-heavy.
+ */
+export const contentTier = (session: Session): ContentTier => {
+  const track = cueTrack(session)
+  if (!track) return "speech"
+  const audible = track.clips.filter(
+    (c) => !c.muted && !(c.source.kind === "bed" && c.source.bedId === "roomTone"),
+  )
+  if (audible.length === 0) return "speech"
+
+  const total = timelineDurationSec(session)
+  const covered = audible.reduce((sum, c) => sum + clipDurationSec(c), 0)
+  return total > 0 && covered / total >= 0.25 ? "music-heavy" : "occasional-cue"
 }
 
 // Lazy import so the demuxers stay off the initial bundle, narrowed to the containers a
@@ -120,11 +163,12 @@ export const encodeOpus = async (
   sampleRate: number,
   durationSec: number,
   name = "episode.weba",
+  tier: ContentTier = "speech",
 ): Promise<EncodedRecording | null> => {
   const { AudioBufferSource, BufferTarget, Output, WebMOutputFormat } = await loadMediabunny()
 
   const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() })
-  const source = new AudioBufferSource({ codec: "opus", bitrate: bitrateFor(durationSec) })
+  const source = new AudioBufferSource({ codec: "opus", bitrate: bitrateFor(durationSec, tier) })
   output.addAudioTrack(source)
   await output.start()
 
