@@ -117,5 +117,6 @@ No router is installed yet. Slice 1 can stay single-page; add `vue-router` when 
   `localStorage.setItem('macroplan:source', <the toml string>)` — the app migrates
   `macroplan:source` into a plan in `macroplan:library`, whose shape is
   `{version:1, activeId, plans:[{id, name, source}]}`.
-  Nothing else. The push-to-deploy loop is verified: commit `6bbff99` triggered a deployment through
-  the Gitea webhook with no manual step, and it reached `finished`.
+
+Nothing else. The push-to-deploy loop is verified: commit `6bbff99` triggered a deployment through
+the Gitea webhook with no manual step, and it reached `finished`.
