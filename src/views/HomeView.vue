@@ -67,9 +67,9 @@ const version = __APP_VERSION__
           <span class="room-tag mono">live</span>
         </div>
         <p class="room-copy">
-          Browse recordings across the network. Your own arrive straight from your PDS, with no
-          account needed to read them. Everyone else's come from the appview, which indexes every
-          recording off the firehose. A recording keeps a link back to its note on
+          Play what people have been recording, newest first, without an account. Each one shows its
+          length, the day it went up, and credit to whoever made the music underneath. Narrow the
+          list to one person and every recording also links back to the note it belongs to on
           <a href="https://remanso.space">remanso.space</a>, which stays home for the writing.
         </p>
       </RouterLink>
@@ -97,39 +97,61 @@ const version = __APP_VERSION__
         <li>
           <span class="step-n mono">01</span>
           <div>
-            <h3>Record in the browser</h3>
+            <h3>Record, and mark as you go</h3>
             <p>
-              Speak into your microphone, or import a file you already have. A take is written to
-              disk as you go, so a reload or a closed tab mid-sentence does not cost you the
-              recording.
+              Speak into your microphone and watch the level as you talk. When a line comes out
+              wrong, tap a key to flag the spot, say it again, and carry on. Record as many takes as
+              you like. Nothing is lost if you reload the page or close the tab mid-sentence.
             </p>
           </div>
         </li>
         <li>
           <span class="step-n mono">02</span>
           <div>
-            <h3>Cut and mix</h3>
+            <h3>Cut it down</h3>
             <p>
-              Trim the ends, take out the dead air, level the whole thing to
-              <code class="mono">-16 LUFS</code>. Put openly licensed music where a segment needs
-              it. Every edit points back at the original take, and every edit can be undone.
+              Scrub the waveform, jump between your flags, and throw out the parts you do not want.
+              The long pauses go in one click, the flagged fumbles in another. Mark chapters where
+              the subject turns. Anything you regret, undo.
             </p>
           </div>
         </li>
         <li>
           <span class="step-n mono">03</span>
           <div>
-            <h3>Publish and paste</h3>
+            <h3>Put music under it</h3>
             <p>
-              The render goes to your PDS as a recording, and you get back one line of markdown.
-              Paste it into the note it belongs to, commit, and the note republishes with the audio
-              playing inline.
+              Search freely licensed music from inside the studio and hear a track before you commit
+              to it. Drop it under the intro, the chapter breaks, or the ending. Music under speech
+              steps back so your voice stays in front, and whoever made the track gets credited
+              alongside the recording.
             </p>
-            <pre class="snippet mono">
-![Episode title - audio](at://…/space.remanso.recording/3lk…)</pre>
+          </div>
+        </li>
+        <li>
+          <span class="step-n mono">04</span>
+          <div>
+            <h3>Hear the whole thing, then publish</h3>
+            <p>
+              Play the finished cut end to end before anyone else hears it. It comes out evened to a
+              steady listening level, so nobody reaches for the volume. Then publish it to your own
+              account, where it sits beside everything else you have written.
+            </p>
           </div>
         </li>
       </ol>
+
+      <!-- The attach story: the studio's best trick, and the one nobody expects. -->
+      <aside class="attach">
+        <p class="hw-label attach-label">the note never has to change</p>
+        <p class="attach-p">
+          Pick one of your notes before you publish, and the recording finds its way onto it. There
+          is nothing to paste and nothing to edit. Your writing stays word for word as you left it,
+          and the audio is waiting there the next time someone opens the page. Record a second
+          version months later and it takes the same place, so every link anyone has shared still
+          plays.
+        </p>
+      </aside>
     </div>
   </section>
 
@@ -332,8 +354,7 @@ const version = __APP_VERSION__
   text-wrap: pretty;
 }
 
-.room-copy code,
-.snippet {
+.room-copy code {
   font-family: var(--hw-mono);
   font-size: 0.85em;
   background: var(--hw-pink-wash);
@@ -432,14 +453,27 @@ const version = __APP_VERSION__
   text-wrap: pretty;
 }
 
-.snippet {
-  display: block;
-  margin: 0.85rem 0 0;
-  padding: 0.7rem 0.85rem;
-  overflow-x: auto;
-  white-space: pre;
-  font-size: 0.8rem;
-  line-height: 1.4;
+/* The attach callout reads as a pressed-in note in the margin, not a banner ad. */
+.attach {
+  margin: 2rem 0 0;
+  padding: 1.4rem 1.6rem;
+  background: var(--hw-surface);
+  border: 1px solid var(--hw-rule);
+  border-left: 3px solid var(--hw-pink-deep);
+  border-radius: 3px;
+}
+
+.attach-label {
+  color: var(--hw-pink-deep);
+  margin: 0 0 0.6rem;
+}
+
+.attach-p {
+  margin: 0;
+  font-size: 1.08rem;
+  line-height: 1.6;
+  color: var(--hw-ink);
+  text-wrap: pretty;
 }
 
 /* ── Sibling ─────────────────────────────────────────────── */

@@ -43,7 +43,7 @@ const detailOf = (result: { detail?: string }) => result.detail
 
 const errorFor = (reason: string, detail?: string) =>
   reason === "unresolved-actor"
-    ? `Could not find a repo for "${requested.value}". Check the handle, or that its PDS is reachable.`
+    ? `Could not find anyone at "${requested.value}". Check the handle for a typo.`
     : `Could not read the recordings (${reason}${detail ? `: ${detail}` : ""}).`
 
 const load = async () => {
@@ -130,20 +130,19 @@ const titleOf = (recording: ListenRecording) =>
     <div class="page-inner">
       <p class="hw-label eyebrow">§ — listen</p>
       <h1 v-if="mode === 'everyone'" class="page-title">
-        Every recording, from every repo that publishes one.
+        Everything anyone has said out loud here.
       </h1>
-      <h1 v-else class="page-title">Recordings, straight from the PDS that holds them.</h1>
+      <h1 v-else class="page-title">Everything one person has said out loud.</h1>
 
       <p v-if="mode === 'everyone'" class="page-lede">
-        Every <code class="mono">space.remanso.recording</code> the
-        <a href="https://api.remanso.space">appview</a> has indexed, newest first, read with no
-        account needed. Each plays from the author's own PDS. Add
-        <code class="mono">?handle=you.example.com</code> to read a single repo instead.
+        Newest first, and no account needed to listen. The audio comes straight from the account of
+        whoever recorded it. To follow one person instead, put their handle in the address:
+        <code class="mono">?handle=you.example.com</code>.
       </p>
       <p v-else class="page-lede">
-        Every <code class="mono">space.remanso.recording</code> in one repo, newest first, read with
-        no account needed. Each one keeps a link back to its note on
-        <a href="https://remanso.space">remanso.space</a>, which stays home for the writing.
+        Newest first, and no account needed to listen. Each one keeps a link back to the note it
+        belongs to on <a href="https://remanso.space">remanso.space</a>, which stays home for the
+        writing.
       </p>
 
       <template>
@@ -158,20 +157,18 @@ const titleOf = (recording: ListenRecording) =>
           <p>{{ error }}</p>
         </div>
 
-        <p v-if="loading" class="status-line">
-          {{ mode === "everyone" ? "Loading recordings…" : "Reading the repo…" }}
-        </p>
+        <p v-if="loading" class="status-line">Loading recordings…</p>
 
         <div v-else-if="!recordings.length && !error" class="page-note">
           <p v-if="mode === 'everyone'">
-            No recordings indexed yet. Publish a cut from
+            Nobody has published a recording yet. Make the first from
             <RouterLink to="/studio">the studio</RouterLink> and it shows up here.
           </p>
           <p v-else-if="isOwnRepo">
-            Nothing in your recording collection yet. Publish a cut from
+            You have not published a recording yet. Make one in
             <RouterLink to="/studio">the studio</RouterLink> and it shows up here.
           </p>
-          <p v-else>This repo holds no recordings.</p>
+          <p v-else>Nothing recorded here yet.</p>
         </div>
 
         <ol v-if="recordings.length" class="takes">
