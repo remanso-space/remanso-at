@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import { RouterLink, useRoute, useRouter } from "vue-router"
 
 import { useSession } from "../composables/useSession"
+import { deleteRecording } from "../modules/atproto/deleteRecording"
 import { listAllRecordings } from "../modules/atproto/listAllRecordings"
 import { listRecordings, type ListenRecording } from "../modules/atproto/listRecordings"
+import { searchActors, type ActorSuggestion } from "../modules/atproto/searchActors"
 import { formatDuration } from "../utils/formatDuration"
 
 // Two scopes. A single repo is read straight from its PDS: `?handle=` or `?did=` picks
@@ -36,25 +38,95 @@ const loadingMore = ref(false)
 const error = ref<string | null>(null)
 const shownHandle = ref<string | null>(null)
 
-// The search box. Suggestions are the handles we have resolved this session — every repo
-// you visit is remembered, plus your own — so the datalist behaves like a select of people
-// you already know, while still letting you type any new handle by hand.
-const search = ref("")
-const knownHandles = ref<string[]>([])
+// The search box. Suggestions come from the network — the public appview's typeahead over
+// every atproto handle — so someone else's recordings are findable without knowing their
+// handle by heart. A free-typed handle still works: the list is a shortcut, not a gate.
+const SUGGEST_DEBOUNCE_MS = 180
 
-const rememberHandle = (h: string | null | undefined) => {
-  const trimmed = h?.trim()
-  if (trimmed && !knownHandles.value.includes(trimmed)) knownHandles.value.push(trimmed)
+const search = ref("")
+const suggestions = ref<ActorSuggestion[]>([])
+const suggestOpen = ref(false)
+const activeIndex = ref(-1)
+
+let suggestTimer: ReturnType<typeof setTimeout> | undefined
+let suggestAbort: AbortController | undefined
+// The box is written to programmatically too (seeded from the repo in focus); only a real
+// keystroke should reopen the list, so suggesting is driven from the input event.
+const runSuggest = async (query: string) => {
+  suggestAbort?.abort()
+  const controller = new AbortController()
+  suggestAbort = controller
+
+  const found = await searchActors(query, { signal: controller.signal })
+  if (controller.signal.aborted) return
+  suggestions.value = found
+  suggestOpen.value = found.length > 0
+  activeIndex.value = -1
 }
 
-const submitSearch = () => {
-  const asked = search.value.trim()
-  if (!asked) {
-    void router.push({ path: "/listen", query: { all: "1" } })
+const onSearchInput = () => {
+  const query = search.value.trim()
+  clearTimeout(suggestTimer)
+
+  if (!query) {
+    suggestAbort?.abort()
+    suggestions.value = []
+    suggestOpen.value = false
+    activeIndex.value = -1
     return
   }
-  void router.push({ path: "/listen", query: { handle: asked } })
+  suggestTimer = setTimeout(() => void runSuggest(query), SUGGEST_DEBOUNCE_MS)
 }
+
+const closeSuggestions = () => {
+  suggestOpen.value = false
+  activeIndex.value = -1
+}
+
+const goToHandle = (asked: string) => {
+  clearTimeout(suggestTimer)
+  suggestAbort?.abort()
+  closeSuggestions()
+  void router.push(
+    asked
+      ? { path: "/listen", query: { handle: asked } }
+      : { path: "/listen", query: { all: "1" } },
+  )
+}
+
+const pick = (suggestion: ActorSuggestion) => {
+  search.value = suggestion.handle
+  goToHandle(suggestion.handle)
+}
+
+// Enter with a highlighted row takes that row; with none it takes what is typed, so a handle
+// the appview has never indexed is still reachable.
+const submitSearch = () => {
+  const highlighted = suggestOpen.value ? suggestions.value[activeIndex.value] : undefined
+  if (highlighted) {
+    pick(highlighted)
+    return
+  }
+  goToHandle(search.value.trim())
+}
+
+// Arrows cycle through the rows and back out to "nothing highlighted", so holding ArrowUp
+// returns you to what you typed instead of trapping you in the list. Slot 0 is that
+// no-selection state, slots 1..n are the rows.
+const moveActive = (step: number) => {
+  if (!suggestions.value.length) return
+  if (!suggestOpen.value) {
+    suggestOpen.value = true
+    return
+  }
+  const slots = suggestions.value.length + 1
+  activeIndex.value = ((activeIndex.value + 1 + step + slots) % slots) - 1
+}
+
+onUnmounted(() => {
+  clearTimeout(suggestTimer)
+  suggestAbort?.abort()
+})
 
 // A monotonic token: a slower earlier load must never overwrite a newer scope's results,
 // and the everyone feed has no actor to compare, so a counter covers both scopes.
@@ -100,7 +172,6 @@ const load = async () => {
   recordings.value = result.recordings
   cursor.value = result.cursor
   shownHandle.value = result.actor.handle
-  rememberHandle(result.actor.handle)
 }
 
 const loadMore = async () => {
@@ -120,10 +191,11 @@ const loadMore = async () => {
 }
 
 const syncSearch = () => {
-  rememberHandle(handle.value)
   // Show the handle in focus, not the raw DID — a repo opened by ?did= still reads back as
   // its handle once resolved. The everyone feed leaves the box empty.
   search.value = mode.value === "repo" ? (shownHandle.value ?? requested.value) : ""
+  suggestions.value = []
+  closeSuggestions()
 }
 
 onMounted(async () => {
@@ -138,8 +210,6 @@ watch([requested, wantsEveryone], async () => {
   await load()
   syncSearch()
 })
-
-watch(handle, (h) => rememberHandle(h))
 
 const whose = computed(() => {
   if (mode.value === "everyone") return "everyone"
@@ -158,6 +228,52 @@ const publishedOn = (recording: ListenRecording) => {
 
 const titleOf = (recording: ListenRecording) =>
   recording.value.title || recording.note?.title || "Untitled recording"
+
+// Deleting your own recordings, with friction. deleteRecord only ever touches the caller's
+// own repo, so the controls only render on your own recordings (`isOwnRepo`). The friction is
+// a typed confirmation: opening the panel is not enough — you have to type "delete" before the
+// permanent button unlocks, so a stray tap on a phone can't erase a take.
+const CONFIRM_WORD = "delete"
+
+const confirmingUri = ref<string | null>(null)
+const confirmText = ref("")
+const deletingUri = ref<string | null>(null)
+const deleteError = ref<string | null>(null)
+
+const canConfirmDelete = computed(() => confirmText.value.trim().toLowerCase() === CONFIRM_WORD)
+
+const startDelete = (uri: string) => {
+  confirmingUri.value = uri
+  confirmText.value = ""
+  deleteError.value = null
+}
+
+const cancelDelete = () => {
+  confirmingUri.value = null
+  confirmText.value = ""
+  deleteError.value = null
+}
+
+const confirmDelete = async (recording: ListenRecording) => {
+  if (!canConfirmDelete.value || deletingUri.value) return
+  deletingUri.value = recording.uri
+  deleteError.value = null
+
+  const result = await deleteRecording({ did: did.value ?? "", rkey: recording.rkey })
+  deletingUri.value = null
+  if (!result.ok) {
+    deleteError.value =
+      result.reason === "no-session"
+        ? "You are signed out. Sign in again to delete this recording."
+        : `Could not delete the recording (${result.reason}${
+            "detail" in result ? `: ${result.detail}` : ""
+          }).`
+    return
+  }
+
+  recordings.value = recordings.value.filter((r) => r.uri !== recording.uri)
+  cancelDelete()
+}
 </script>
 
 <template>
@@ -180,80 +296,174 @@ const titleOf = (recording: ListenRecording) =>
       </p>
 
       <form class="search" role="search" @submit.prevent="submitSearch">
-        <input
-          v-model="search"
-          class="search-input mono"
-          type="search"
-          name="handle"
-          list="handle-suggestions"
-          placeholder="a handle, e.g. you.example.com"
-          aria-label="Search recordings by handle"
-          autocapitalize="off"
-          autocorrect="off"
-          spellcheck="false"
-        />
-        <datalist id="handle-suggestions">
-          <option v-for="h in knownHandles" :key="h" :value="h"></option>
-        </datalist>
+        <div class="search-field">
+          <input
+            v-model="search"
+            class="search-input mono"
+            type="text"
+            name="handle"
+            placeholder="search a handle, e.g. you.example.com"
+            aria-label="Search recordings by handle"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="handle-suggestions"
+            :aria-expanded="suggestOpen"
+            :aria-activedescendant="activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined"
+            autocapitalize="off"
+            autocorrect="off"
+            autocomplete="off"
+            spellcheck="false"
+            @input="onSearchInput"
+            @keydown.down.prevent="moveActive(1)"
+            @keydown.up.prevent="moveActive(-1)"
+            @keydown.esc.prevent="closeSuggestions"
+            @blur="closeSuggestions"
+          />
+
+          <ul
+            v-if="suggestOpen"
+            id="handle-suggestions"
+            class="suggestions"
+            role="listbox"
+            aria-label="Matching handles"
+          >
+            <li
+              v-for="(suggestion, index) in suggestions"
+              :id="`suggestion-${index}`"
+              :key="suggestion.did"
+              class="suggestion"
+              :class="{ active: index === activeIndex }"
+              role="option"
+              :aria-selected="index === activeIndex"
+              @mousedown.prevent="pick(suggestion)"
+              @mouseenter="activeIndex = index"
+            >
+              <img
+                v-if="suggestion.avatar"
+                class="suggestion-avatar"
+                :src="suggestion.avatar"
+                alt=""
+                loading="lazy"
+              />
+              <span v-else class="suggestion-avatar placeholder" aria-hidden="true"></span>
+              <span class="suggestion-text">
+                <span class="suggestion-handle mono">{{ suggestion.handle }}</span>
+                <span v-if="suggestion.displayName" class="suggestion-name">
+                  {{ suggestion.displayName }}
+                </span>
+              </span>
+            </li>
+          </ul>
+        </div>
+
         <button class="search-go" type="submit">Listen</button>
       </form>
 
       <p class="whose mono">
-          {{ whose
-          }}<span v-if="recordings.length">
-            — {{ recordings.length }} recording{{ recordings.length === 1 ? "" : "s" }}</span
-          >
+        {{ whose
+        }}<span v-if="recordings.length">
+          — {{ recordings.length }} recording{{ recordings.length === 1 ? "" : "s" }}</span
+        >
+      </p>
+
+      <div v-if="error" class="page-note error">
+        <p>{{ error }}</p>
+      </div>
+
+      <p v-if="loading" class="status-line">Loading recordings…</p>
+
+      <div v-else-if="!recordings.length && !error" class="page-note">
+        <p v-if="mode === 'everyone'">
+          Nobody has published a recording yet. Make the first from
+          <RouterLink to="/studio">the studio</RouterLink> and it shows up here.
         </p>
+        <p v-else-if="isOwnRepo">
+          You have not published a recording yet. Make one in
+          <RouterLink to="/studio">the studio</RouterLink> and it shows up here.
+        </p>
+        <p v-else>Nothing recorded here yet.</p>
+      </div>
 
-        <div v-if="error" class="page-note error">
-          <p>{{ error }}</p>
-        </div>
+      <ol v-if="recordings.length" class="takes">
+        <li v-for="recording in recordings" :key="recording.uri" class="take">
+          <div class="take-head">
+            <h2 class="take-title">{{ titleOf(recording) }}</h2>
+            <span v-if="formatDuration(recording.value.durationSec)" class="take-len mono">
+              {{ formatDuration(recording.value.durationSec) }}
+            </span>
+          </div>
 
-        <p v-if="loading" class="status-line">Loading recordings…</p>
-
-        <div v-else-if="!recordings.length && !error" class="page-note">
-          <p v-if="mode === 'everyone'">
-            Nobody has published a recording yet. Make the first from
-            <RouterLink to="/studio">the studio</RouterLink> and it shows up here.
+          <p class="take-meta mono">
+            <span v-if="publishedOn(recording)">{{ publishedOn(recording) }}</span>
+            <a v-if="recording.note" :href="recording.note.url" class="take-note"> the note ↗ </a>
           </p>
-          <p v-else-if="isOwnRepo">
-            You have not published a recording yet. Make one in
-            <RouterLink to="/studio">the studio</RouterLink> and it shows up here.
-          </p>
-          <p v-else>Nothing recorded here yet.</p>
-        </div>
 
-        <ol v-if="recordings.length" class="takes">
-          <li v-for="recording in recordings" :key="recording.uri" class="take">
-            <div class="take-head">
-              <h2 class="take-title">{{ titleOf(recording) }}</h2>
-              <span v-if="formatDuration(recording.value.durationSec)" class="take-len mono">
-                {{ formatDuration(recording.value.durationSec) }}
-              </span>
+          <audio class="take-audio" controls preload="none" :src="recording.audioUrl"></audio>
+
+          <details v-if="recording.value.credits?.length" class="take-credits">
+            <summary>Music credits</summary>
+            <ul>
+              <li v-for="credit in recording.value.credits" :key="credit.sourceUrl">
+                <a :href="credit.sourceUrl">{{ credit.title }}</a> by {{ credit.creator }} —
+                <a :href="credit.licenseUrl">{{ credit.license }}</a>
+              </li>
+            </ul>
+          </details>
+
+          <div v-if="isOwnRepo" class="take-delete">
+            <button
+              v-if="confirmingUri !== recording.uri"
+              class="delete-open"
+              type="button"
+              @click="startDelete(recording.uri)"
+            >
+              Delete
+            </button>
+
+            <div v-else class="delete-confirm">
+              <p class="delete-warn">
+                This permanently removes “{{ titleOf(recording) }}” from your PDS. It cannot be
+                undone. Type <code>{{ CONFIRM_WORD }}</code> to confirm.
+              </p>
+              <div class="delete-row">
+                <input
+                  v-model="confirmText"
+                  class="delete-input mono"
+                  type="text"
+                  :placeholder="CONFIRM_WORD"
+                  aria-label="Type delete to confirm"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  autocomplete="off"
+                  spellcheck="false"
+                  @keydown.enter.prevent="confirmDelete(recording)"
+                />
+                <button
+                  class="delete-go"
+                  type="button"
+                  :disabled="!canConfirmDelete || deletingUri === recording.uri"
+                  @click="confirmDelete(recording)"
+                >
+                  {{ deletingUri === recording.uri ? "Deleting…" : "Delete forever" }}
+                </button>
+                <button
+                  class="delete-cancel"
+                  type="button"
+                  :disabled="deletingUri === recording.uri"
+                  @click="cancelDelete"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
             </div>
+          </div>
+        </li>
+      </ol>
 
-            <p class="take-meta mono">
-              <span v-if="publishedOn(recording)">{{ publishedOn(recording) }}</span>
-              <a v-if="recording.note" :href="recording.note.url" class="take-note"> the note ↗ </a>
-            </p>
-
-            <audio class="take-audio" controls preload="none" :src="recording.audioUrl"></audio>
-
-            <details v-if="recording.value.credits?.length" class="take-credits">
-              <summary>Music credits</summary>
-              <ul>
-                <li v-for="credit in recording.value.credits" :key="credit.sourceUrl">
-                  <a :href="credit.sourceUrl">{{ credit.title }}</a> by {{ credit.creator }} —
-                  <a :href="credit.licenseUrl">{{ credit.license }}</a>
-                </li>
-              </ul>
-            </details>
-          </li>
-        </ol>
-
-        <button v-if="cursor" class="more" type="button" :disabled="loadingMore" @click="loadMore">
-          {{ loadingMore ? "Loading…" : "Load older recordings" }}
-        </button>
+      <button v-if="cursor" class="more" type="button" :disabled="loadingMore" @click="loadMore">
+        {{ loadingMore ? "Loading…" : "Load older recordings" }}
+      </button>
 
       <nav class="scope-links">
         <RouterLink v-if="mode !== 'everyone'" :to="{ path: '/listen', query: { all: '1' } }">
@@ -315,34 +525,121 @@ const titleOf = (recording: ListenRecording) =>
   border-radius: 3px;
 }
 
+/* --hw-rule (14% ink) is a hairline for card edges — 1.38:1 on white, far under the 3:1
+   WCAG asks of a control's boundary, so it does not read as something you can type in.
+   45% ink puts the border at 3.22:1. The fill is --link-accent rather than --hw-pink-deep
+   (4.93:1 under white text) — style.css already pins it to 48% lightness, which lands
+   white-on-accent at 7.18:1. */
 .search {
   display: flex;
   gap: 0.6rem;
   margin: 0 0 2rem;
 }
 
-.search-input {
+.search-field {
+  position: relative;
   flex: 1;
   min-width: 0;
+}
+
+.search-input {
+  width: 100%;
+  box-sizing: border-box;
   font-size: 0.95rem;
-  border: 1px solid var(--hw-rule);
+  border: 1px solid color-mix(in oklch, var(--hw-ink) 45%, var(--hw-surface));
   border-radius: 6px;
   background: var(--hw-surface);
-  color: inherit;
+  color: var(--hw-ink);
   padding: 0.55rem 0.8rem;
 }
 
+.search-input::placeholder {
+  color: var(--hw-ink-soft);
+  opacity: 1;
+}
+
 .search-input:focus {
-  outline: none;
-  border-color: var(--hw-pink-deep);
+  outline: 2px solid var(--link-accent);
+  outline-offset: 1px;
+  border-color: var(--link-accent);
+}
+
+.suggestions {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  max-height: 17rem;
+  overflow-y: auto;
+  border: 1px solid color-mix(in oklch, var(--hw-ink) 45%, var(--hw-surface));
+  border-radius: 6px;
+  background: var(--hw-surface);
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--hw-ink) 18%, transparent);
+}
+
+.suggestion {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.suggestion.active {
+  background: var(--link-accent);
+}
+
+.suggestion-avatar {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+
+.suggestion-avatar.placeholder {
+  background: var(--hw-pink-wash-2);
+}
+
+.suggestion-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.suggestion-handle {
+  font-size: 0.9rem;
+  color: var(--hw-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestion-name {
+  font-size: 0.8rem;
+  color: var(--hw-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestion.active .suggestion-handle,
+.suggestion.active .suggestion-name {
+  color: var(--hw-surface);
 }
 
 .search-go {
   font: inherit;
   font-size: 0.95rem;
-  border: 1px solid var(--hw-pink-deep);
+  border: 1px solid var(--link-accent);
   border-radius: 6px;
-  background: var(--hw-pink-deep);
+  background: var(--link-accent);
   color: var(--hw-surface);
   padding: 0.55rem 1.2rem;
   cursor: pointer;
@@ -350,7 +647,8 @@ const titleOf = (recording: ListenRecording) =>
 }
 
 .search-go:hover {
-  opacity: 0.9;
+  background: color-mix(in oklch, var(--link-accent) 88%, var(--hw-ink));
+  border-color: color-mix(in oklch, var(--link-accent) 88%, var(--hw-ink));
 }
 
 .page-note {
@@ -457,6 +755,106 @@ const titleOf = (recording: ListenRecording) =>
   margin: 0.5rem 0 0;
   padding-left: 1.1rem;
   line-height: 1.5;
+}
+
+.take-delete {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--hw-rule);
+}
+
+.delete-open {
+  font: inherit;
+  font-size: 0.8rem;
+  border: none;
+  background: none;
+  color: var(--hw-ink-faint);
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.delete-open:hover {
+  color: var(--hw-pink-deep);
+}
+
+.delete-warn {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--hw-ink-soft);
+  margin: 0 0 0.6rem;
+}
+
+.delete-warn code {
+  font-family: var(--hw-mono);
+  font-size: 0.85em;
+  background: var(--hw-pink-wash);
+  color: var(--hw-pink-deep);
+  padding: 0.05em 0.35em;
+  border-radius: 3px;
+}
+
+.delete-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.delete-input {
+  flex: 1;
+  min-width: 8rem;
+  font-size: 0.9rem;
+  border: 1px solid color-mix(in oklch, var(--hw-ink) 38%, var(--hw-surface));
+  border-radius: 6px;
+  background: var(--hw-surface);
+  color: var(--hw-ink);
+  padding: 0.4rem 0.65rem;
+}
+
+.delete-input:focus {
+  outline: 2px solid var(--hw-pink-deep);
+  outline-offset: 1px;
+  border-color: var(--hw-pink-deep);
+}
+
+.delete-go {
+  font: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--hw-pink-deep);
+  border-radius: 6px;
+  background: var(--hw-pink-deep);
+  color: var(--hw-surface);
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.delete-go:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.delete-cancel {
+  font: inherit;
+  font-size: 0.9rem;
+  border: 1px solid var(--hw-rule);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--hw-ink-soft);
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.delete-cancel:hover:not(:disabled) {
+  border-color: var(--hw-ink-faint);
+}
+
+.delete-error {
+  font-size: 0.85rem;
+  color: var(--hw-pink-deep);
+  margin: 0.6rem 0 0;
 }
 
 .more {

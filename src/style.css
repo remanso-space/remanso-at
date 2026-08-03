@@ -78,6 +78,11 @@
 
 html {
   background: var(--hw-paper);
+  /* The palette above is paper — hardcoded whites, ink on light. Without this, a reader on a
+     dark-mode OS gets native controls (audio players, autofill and datalist popups,
+     scrollbars, spellcheck menus) painted for dark while the page stays light: white text on
+     white. There is no dark theme to opt into, so declare the one that exists. */
+  color-scheme: light;
 }
 
 body {
