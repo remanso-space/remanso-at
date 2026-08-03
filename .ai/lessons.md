@@ -77,22 +77,26 @@ on disk and told me nothing.
 ---
 
 2026-08-03. Jean sent a screenshot of the `/listen` handle box: a native `<datalist>` popup with
-its one option rendering near-white on white. I wrote **"Your OS is in dark mode"** as the cause.
-Jean: "this is not the first time you're wrong about the OS theme." I had inferred a machine setting
-from rendered pixels and stated it as fact.
+its one option rendering near-white on white. I wrote **"Your OS is in dark mode"** as the cause,
+having inferred a machine setting from rendered pixels and stated it as fact. Jean: "this is not the
+first time you're wrong about the OS theme."
 
-The screenshot supported exactly one claim — the option text is unreadable. Everything after that
-was invention. Native form popups in Chrome on Linux take their colors from the GTK theme, which is
-not the same switch as a "dark mode" toggle, so several configurations produce this. The cause is
-still unknown, and I have not established it.
+Then he confirmed: his OS **is** in dark mode. So the guess was right and the diagnosis holds — with
+no `color-scheme` declared, Chrome paints native controls for dark while the page keeps its light
+`--hw-paper` background. The failure was never the conclusion; it was asserting an unverifiable
+environment fact as settled. And on the correction I went too far the other way, retracting a sound
+root cause as "undiagnosed" — same error, opposite sign.
 
-The fix I shipped (`color-scheme: light` on `html`, `src/style.css`) is defensible on its own terms:
-the palette is hardcoded paper — `--hw-surface: #ffffff`, ink on light, no dark variant anywhere —
-so declaring the only scheme that exists is right whether or not it addresses that popup. That is
-the argument I should have made, with no causal story attached.
+The fix (`color-scheme: light` on `html`, `src/style.css`) is also defensible without the causal
+story: the palette is hardcoded paper — `--hw-surface: #ffffff`, ink on light, no dark variant
+anywhere — so declaring the only scheme that exists is right regardless.
 
-**How to apply:** when reading a screenshot, separate what is rendered from why. Describe the
-former; for the latter, either ask for the one observation that settles it (GTK theme, DevTools
-`prefers-color-scheme`, a computed style) or justify the fix without naming a cause. Never assert
-Jean's OS theme, browser settings, or any local configuration — it is unobservable from here, and
-this is a repeat offence, not a one-off.
+**How to apply:** separate what a screenshot renders from why. State the cause as a hypothesis and
+ask the one question that settles it (theme, DevTools `prefers-color-scheme`, a computed style) —
+Jean answers in a word. Lead with fixes that hold either way. And when a correction arrives, work
+out what exactly was wrong before withdrawing anything: "you were wrong about X" can mean the claim
+was false *or* that I had no business asserting it, and retracting correct technical work on the
+second reading costs more than the original overreach.
+
+(Environment facts, once confirmed, belong in memory rather than being re-guessed each session:
+dark mode is now recorded there.)
