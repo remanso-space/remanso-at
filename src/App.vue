@@ -7,6 +7,9 @@ import { useSession } from "./composables/useSession"
 
 // First call wins: this resolves the OAuth callback and any ?handle= prefill.
 useSession(useRouter())
+
+// Injected at build time from package.json — the version is written in exactly one place.
+const version = __APP_VERSION__
 </script>
 
 <template>
@@ -47,6 +50,7 @@ useSession(useRouter())
       </div>
       <div class="footer-fine mono">
         <span>made by <a href="https://apoena.dev">apoena.dev ↗</a></span>
+        <span class="footer-version">v{{ version }}</span>
       </div>
     </footer>
 
@@ -199,6 +203,10 @@ main {
   align-items: center;
   font-size: 0.8rem;
   color: var(--hw-ink-faint);
+}
+
+.footer-version {
+  margin-left: auto;
 }
 
 /* ── Responsive ──────────────────────────────────────────── */

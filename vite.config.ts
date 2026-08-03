@@ -4,7 +4,11 @@ import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vite"
 import { VitePWA } from "vite-plugin-pwa"
 
+import pkg from "./package.json" with { type: "json" }
+
 export default defineConfig({
+  // package.json is the only place the version is written; the footer reads it from here.
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [
     vue(),
     tailwindcss(),

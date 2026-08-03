@@ -2,7 +2,8 @@
 
 **Remanso Studio** — an ode to expression and to what you keep in your PDS.
 
-Deployed at https://remanso.at
+**v1.0** — capture, derush, post-production, music slots, publish, and both `/listen` scopes are
+all live. Deployed at https://remanso.at
 
 Sibling to [remanso.space](https://remanso.space), which is the writing tool. This is the other half
 of the pair: what happens to a note once it is public.
@@ -10,7 +11,7 @@ of the pair: what happens to a note once it is public.
 | Route     | What                                                                                                                                                                                                                                                                                |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/studio` | Multi-take capture, derush, non-destructive trim, a post-production chain, and music slots — an intro, a break, an outro — filled from openly licensed audio and mixed into the render. Publishes a `space.remanso.recording` and hands you the markdown link to paste into a note. |
-| `/listen` | Browse `space.remanso.recording` — yours from your PDS, everyone's from the [appview](https://api.remanso.space) once it indexes them. Notes themselves are not rendered here; links to a note open remanso.space, which stays canonical for `/pub/…`.                              |
+| `/listen` | Browse `space.remanso.recording` — yours from your PDS, everyone's from the [appview](https://api.remanso.space), which indexes them off the firehose. Notes themselves are not rendered here; links to a note open remanso.space, which stays canonical for `/pub/…`.              |
 
 ## Why the studio hands you a link
 

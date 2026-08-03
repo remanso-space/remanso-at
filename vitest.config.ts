@@ -2,6 +2,8 @@ import { fileURLToPath, URL } from "node:url"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vitest/config"
 
+import pkg from "./package.json"
+
 // Vitest config lives on its own, apart from vite.config.ts, on purpose: vitest 3
 // bundles vite 7's types while this app runs vite 8 (rolldown), so a `test` block on
 // vite 8's config type-errors under vue-tsc. This file is excluded from every tsconfig
@@ -9,6 +11,8 @@ import { defineConfig } from "vitest/config"
 // cross-version type clash never surfaces. Keep vite.config.ts free of test config.
 export default defineConfig({
   plugins: [vue()],
+  // Mirrors vite.config.ts so components reading the version mount under test.
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

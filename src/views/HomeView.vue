@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router"
+
+// Injected at build time from package.json — the version is written in exactly one place.
+const version = __APP_VERSION__
 </script>
 
 <template>
@@ -7,7 +10,7 @@ import { RouterLink } from "vue-router"
   <section class="hero">
     <div class="hero-inner">
       <div class="hero-left">
-        <p class="hw-label eyebrow">§ — remanso studio</p>
+        <p class="hw-label eyebrow">§ — remanso studio · v{{ version }}</p>
         <h1 class="display">
           Say it out loud,<br />
           and keep it where<br />
@@ -43,7 +46,7 @@ import { RouterLink } from "vue-router"
             <div class="room-t">The studio</div>
             <code class="mono room-route">/studio</code>
           </div>
-          <span class="room-tag mono">in the works</span>
+          <span class="room-tag mono">live</span>
         </div>
         <p class="room-copy">
           Record a take from your microphone, or bring a file you recorded elsewhere. Trim the ends,
@@ -61,12 +64,12 @@ import { RouterLink } from "vue-router"
             <div class="room-t">Listen</div>
             <code class="mono room-route">/listen</code>
           </div>
-          <span class="room-tag mono">in the works</span>
+          <span class="room-tag mono">live</span>
         </div>
         <p class="room-copy">
           Browse recordings across the network. Your own arrive straight from your PDS, with no
-          account needed to read them. Everyone else's follow once the appview learns to index
-          recordings. A recording keeps a link back to its note on
+          account needed to read them. Everyone else's come from the appview, which indexes every
+          recording off the firehose. A recording keeps a link back to its note on
           <a href="https://remanso.space">remanso.space</a>, which stays home for the writing.
         </p>
       </RouterLink>
