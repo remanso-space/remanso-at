@@ -73,3 +73,26 @@ of source **entirely — comments included**. After adding any component, diff t
 baseline, not just the byte size. And measure a true baseline with `git stash -u` (untracked new
 files included) before blaming a change — my first "baseline" build left the new untracked modules
 on disk and told me nothing.
+
+---
+
+2026-08-03. Jean sent a screenshot of the `/listen` handle box: a native `<datalist>` popup with
+its one option rendering near-white on white. I wrote **"Your OS is in dark mode"** as the cause.
+Jean: "this is not the first time you're wrong about the OS theme." I had inferred a machine setting
+from rendered pixels and stated it as fact.
+
+The screenshot supported exactly one claim — the option text is unreadable. Everything after that
+was invention. Native form popups in Chrome on Linux take their colors from the GTK theme, which is
+not the same switch as a "dark mode" toggle, so several configurations produce this. The cause is
+still unknown, and I have not established it.
+
+The fix I shipped (`color-scheme: light` on `html`, `src/style.css`) is defensible on its own terms:
+the palette is hardcoded paper — `--hw-surface: #ffffff`, ink on light, no dark variant anywhere —
+so declaring the only scheme that exists is right whether or not it addresses that popup. That is
+the argument I should have made, with no causal story attached.
+
+**How to apply:** when reading a screenshot, separate what is rendered from why. Describe the
+former; for the latter, either ask for the one observation that settles it (GTK theme, DevTools
+`prefers-color-scheme`, a computed style) or justify the fix without naming a cause. Never assert
+Jean's OS theme, browser settings, or any local configuration — it is unobservable from here, and
+this is a repeat offence, not a one-off.

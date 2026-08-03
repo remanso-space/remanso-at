@@ -157,6 +157,16 @@ describe("ListenView handle search", () => {
     await vi.waitFor(() => expect(router.currentRoute.value.query.all).toBe("1"))
   })
 
+  it("keeps the button inside the field so the two read as one control", async () => {
+    await mountListen()
+    const button = wrapper!.find(".search-field > .search-go")
+    expect(button.exists()).toBe(true)
+    expect(button.attributes("type")).toBe("submit")
+    // Suffix, not prefix: the input comes first in the flex row.
+    const children = [...wrapper!.find(".search-field").element.children].map((el) => el.className)
+    expect(children.indexOf("search-input mono")).toBeLessThan(children.indexOf("search-go"))
+  })
+
   it("closes the list on Escape without navigating", async () => {
     await mountListen()
     await type("an")

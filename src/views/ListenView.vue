@@ -320,6 +320,8 @@ const confirmDelete = async (recording: ListenRecording) => {
             @blur="closeSuggestions"
           />
 
+          <button class="search-go" type="submit">Listen</button>
+
           <ul
             v-if="suggestOpen"
             id="handle-suggestions"
@@ -355,8 +357,6 @@ const confirmDelete = async (recording: ListenRecording) => {
             </li>
           </ul>
         </div>
-
-        <button class="search-go" type="submit">Listen</button>
       </form>
 
       <p class="whose mono">
@@ -388,9 +388,38 @@ const confirmDelete = async (recording: ListenRecording) => {
         <li v-for="recording in recordings" :key="recording.uri" class="take">
           <div class="take-head">
             <h2 class="take-title">{{ titleOf(recording) }}</h2>
-            <span v-if="formatDuration(recording.value.durationSec)" class="take-len mono">
-              {{ formatDuration(recording.value.durationSec) }}
-            </span>
+            <div class="take-head-right">
+              <span v-if="formatDuration(recording.value.durationSec)" class="take-len mono">
+                {{ formatDuration(recording.value.durationSec) }}
+              </span>
+              <button
+                v-if="isOwnRepo && confirmingUri !== recording.uri"
+                class="delete-open"
+                type="button"
+                aria-label="Delete recording"
+                title="Delete recording"
+                @click="startDelete(recording.uri)"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 7l16 0" />
+                  <path d="M10 11l0 6" />
+                  <path d="M14 11l0 6" />
+                  <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+                  <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <p class="take-meta mono">
@@ -410,17 +439,8 @@ const confirmDelete = async (recording: ListenRecording) => {
             </ul>
           </details>
 
-          <div v-if="isOwnRepo" class="take-delete">
-            <button
-              v-if="confirmingUri !== recording.uri"
-              class="delete-open"
-              type="button"
-              @click="startDelete(recording.uri)"
-            >
-              Delete
-            </button>
-
-            <div v-else class="delete-confirm">
+          <div v-if="isOwnRepo && confirmingUri === recording.uri" class="take-delete">
+            <div class="delete-confirm">
               <p class="delete-warn">
                 This permanently removes “{{ titleOf(recording) }}” from your PDS. It cannot be
                 undone. Type <code>{{ CONFIRM_WORD }}</code> to confirm.
@@ -525,43 +545,51 @@ const confirmDelete = async (recording: ListenRecording) => {
   border-radius: 3px;
 }
 
-/* --hw-rule (14% ink) is a hairline for card edges — 1.38:1 on white, far under the 3:1
+/* --hw-rule (14% ink) is a hairline for panel edges — 1.38:1 on white, far under the 3:1
    WCAG asks of a control's boundary, so it does not read as something you can type in.
    45% ink puts the border at 3.22:1. The fill is --link-accent rather than --hw-pink-deep
    (4.93:1 under white text) — style.css already pins it to 48% lightness, which lands
    white-on-accent at 7.18:1. */
 .search {
-  display: flex;
-  gap: 0.6rem;
   margin: 0 0 2rem;
 }
 
+/* Field and button read as one control: the border, radius and focus ring live on the
+   wrapper, and the two children inside are borderless, split by a single divider. */
 .search-field {
   position: relative;
-  flex: 1;
-  min-width: 0;
-}
-
-.search-input {
-  width: 100%;
-  box-sizing: border-box;
-  font-size: 0.95rem;
+  display: flex;
+  align-items: stretch;
   border: 1px solid color-mix(in oklch, var(--hw-ink) 45%, var(--hw-surface));
   border-radius: 6px;
   background: var(--hw-surface);
+}
+
+.search-field:focus-within {
+  outline: 2px solid var(--link-accent);
+  outline-offset: 1px;
+  border-color: var(--link-accent);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: 6px 0 0 6px;
+  background: transparent;
   color: var(--hw-ink);
   padding: 0.55rem 0.8rem;
+}
+
+.search-input:focus {
+  outline: none;
 }
 
 .search-input::placeholder {
   color: var(--hw-ink-soft);
   opacity: 1;
-}
-
-.search-input:focus {
-  outline: 2px solid var(--link-accent);
-  outline-offset: 1px;
-  border-color: var(--link-accent);
 }
 
 .suggestions {
@@ -634,11 +662,16 @@ const confirmDelete = async (recording: ListenRecording) => {
   color: var(--hw-surface);
 }
 
+/* Flush against the wrapper's inner edge: no border of its own, and a radius one pixel
+   tighter than the wrapper's so the fill follows the rounded corner instead of overshooting
+   it. Clipping with overflow on the wrapper is not an option — it would cut the suggestions. */
 .search-go {
+  flex: none;
   font: inherit;
   font-size: 0.95rem;
-  border: 1px solid var(--link-accent);
-  border-radius: 6px;
+  border: none;
+  border-left: 1px solid color-mix(in oklch, var(--hw-ink) 45%, var(--hw-surface));
+  border-radius: 0 5px 5px 0;
   background: var(--link-accent);
   color: var(--hw-surface);
   padding: 0.55rem 1.2rem;
@@ -648,7 +681,13 @@ const confirmDelete = async (recording: ListenRecording) => {
 
 .search-go:hover {
   background: color-mix(in oklch, var(--link-accent) 88%, var(--hw-ink));
-  border-color: color-mix(in oklch, var(--link-accent) 88%, var(--hw-ink));
+}
+
+/* The wrapper already draws a ring on :focus-within, but that does not say which of the two
+   children has the keyboard, so the button keeps an inset ring of its own. */
+.search-go:focus-visible {
+  outline: 2px solid var(--hw-surface);
+  outline-offset: -4px;
 }
 
 .page-note {
@@ -712,6 +751,13 @@ const confirmDelete = async (recording: ListenRecording) => {
   text-wrap: pretty;
 }
 
+.take-head-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: none;
+}
+
 .take-len {
   font-size: 0.85rem;
   color: var(--hw-ink-faint);
@@ -763,20 +809,27 @@ const confirmDelete = async (recording: ListenRecording) => {
   border-top: 1px solid var(--hw-rule);
 }
 
+/* Icon-only trash sits inline in the take head, so it borrows no extra row. Kept quiet at
+   rest (ink-faint) and turning pink on hover, matching the note-link accent elsewhere. */
 .delete-open {
-  font: inherit;
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
   color: var(--hw-ink-faint);
-  padding: 0;
+  padding: 0.15rem;
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  border-radius: 4px;
 }
 
 .delete-open:hover {
   color: var(--hw-pink-deep);
+}
+
+.delete-open:focus-visible {
+  outline: 2px solid var(--link-accent);
+  outline-offset: 1px;
 }
 
 .delete-warn {
