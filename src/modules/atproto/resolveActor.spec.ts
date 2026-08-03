@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { blobUrl, docHandle, pdsEndpoint, resolveActor } from "./resolveActor"
+import { __resetActorCache, blobUrl, docHandle, pdsEndpoint, resolveActor } from "./resolveActor"
 
 const PDS = "https://pds.example.com"
 const DID = "did:plc:abc"
@@ -17,6 +17,7 @@ const okJson = (body: unknown) => ({ ok: true, json: async () => body }) as unkn
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  __resetActorCache()
 })
 
 describe("pdsEndpoint", () => {
@@ -81,6 +82,21 @@ describe("resolveActor", () => {
     )
   })
 
+  it("falls back to the .well-known/atproto-did when bsky cannot resolve the handle", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("resolveHandle")) return { ok: false, status: 400 } as unknown as Response
+      if (url.includes("/.well-known/atproto-did")) {
+        return { ok: true, text: async () => `${DID}\n` } as unknown as Response
+      }
+      return okJson(doc(PDS, "at://you.example.com"))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const resolved = await resolveActor("you.example.com")
+    expect(resolved).toEqual({ did: DID, pds: PDS, handle: "you.example.com" })
+    expect(fetchMock.mock.calls[1][0]).toBe("https://you.example.com/.well-known/atproto-did")
+  })
+
   it("returns null when the handle does not resolve", async () => {
     vi.stubGlobal(
       "fetch",
@@ -95,6 +111,27 @@ describe("resolveActor", () => {
       vi.fn(async () => okJson(doc(null))),
     )
     expect(await resolveActor(DID)).toBeNull()
+  })
+
+  it("collapses a concurrent burst for one identifier into a single resolution", async () => {
+    const fetchMock = vi.fn(async () => okJson(doc(PDS)))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const results = await Promise.all(Array.from({ length: 20 }, () => resolveActor(DID)))
+    expect(results.every((r) => r?.pds === PDS)).toBe(true)
+    // did:plc goes straight to the PLC directory — one fetch, not one per caller.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not cache a null result, so a later call retries", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 500 } as unknown as Response)
+      .mockResolvedValue(okJson(doc(PDS)))
+    vi.stubGlobal("fetch", fetchMock)
+
+    expect(await resolveActor(DID)).toBeNull()
+    expect(await resolveActor(DID)).toEqual({ did: DID, pds: PDS, handle: "you.example.com" })
   })
 
   it("returns null for an empty actor without touching the network", async () => {

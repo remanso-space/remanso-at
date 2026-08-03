@@ -198,8 +198,7 @@ const titleOf = (recording: ListenRecording) =>
         <button class="search-go" type="submit">Listen</button>
       </form>
 
-      <template>
-        <p class="whose mono">
+      <p class="whose mono">
           {{ whose
           }}<span v-if="recordings.length">
             — {{ recordings.length }} recording{{ recordings.length === 1 ? "" : "s" }}</span
@@ -255,7 +254,6 @@ const titleOf = (recording: ListenRecording) =>
         <button v-if="cursor" class="more" type="button" :disabled="loadingMore" @click="loadMore">
           {{ loadingMore ? "Loading…" : "Load older recordings" }}
         </button>
-      </template>
 
       <nav class="scope-links">
         <RouterLink v-if="mode !== 'everyone'" :to="{ path: '/listen', query: { all: '1' } }">

@@ -55,17 +55,35 @@ export const docHandle = (doc: DidDoc | null): string | null => {
   return aka ? aka.slice("at://".length) : null
 }
 
+/**
+ * The HTTPS half of handle resolution: `https://<handle>/.well-known/atproto-did` serves
+ * the bare DID. A handle verifies by DNS TXT *or* this well-known, so a host that skips the
+ * DNS record (and is thus invisible to bsky's resolver) still resolves here.
+ */
+const resolveHandleWellKnown = async (handle: string): Promise<string | null> => {
+  try {
+    const res = await fetch(`https://${handle}/.well-known/atproto-did`)
+    if (!res.ok) return null
+    const did = (await res.text()).trim()
+    return did.startsWith("did:") ? did : null
+  } catch {
+    return null
+  }
+}
+
 export const resolveHandle = async (handle: string): Promise<string | null> => {
   try {
     const res = await fetch(
       `${PUBLIC_API}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`,
     )
-    if (!res.ok) return null
-    const body = (await res.json()) as { did?: string }
-    return body.did ?? null
+    if (res.ok) {
+      const body = (await res.json()) as { did?: string }
+      if (body.did) return body.did
+    }
   } catch {
-    return null
+    // fall through to the well-known lookup
   }
+  return resolveHandleWellKnown(handle)
 }
 
 export interface ResolvedActor {
@@ -74,14 +92,7 @@ export interface ResolvedActor {
   handle: string | null
 }
 
-/**
- * A DID or a handle in, the repo's location out. Returns null when the identity does not
- * resolve or its document names no PDS — either way there is no repo to read.
- */
-export const resolveActor = async (actor: string): Promise<ResolvedActor | null> => {
-  const trimmed = actor.trim().replace(/^@/, "")
-  if (!trimmed) return null
-
+const resolveActorUncached = async (trimmed: string): Promise<ResolvedActor | null> => {
   const did = trimmed.startsWith("did:") ? trimmed : await resolveHandle(trimmed)
   if (!did) return null
 
@@ -91,6 +102,37 @@ export const resolveActor = async (actor: string): Promise<ResolvedActor | null>
 
   return { did, pds, handle: docHandle(doc) ?? (trimmed === did ? null : trimmed) }
 }
+
+// One repo resolution can fan out across every recording it holds — the everyone feed
+// resolves each row's DID, and dozens land on the same one at once. Caching the in-flight
+// promise (not just the settled value) collapses that whole burst into a single lookup,
+// where a value-only cache would still let the concurrent misses each hit the network.
+const actorCache = new Map<string, Promise<ResolvedActor | null>>()
+
+/**
+ * A DID or a handle in, the repo's location out. Returns null when the identity does not
+ * resolve or its document names no PDS — either way there is no repo to read. Resolutions
+ * are memoised per identifier for the session; a null result is not kept, so a transient
+ * failure (a handle mid-propagation, a flaky network) is retried on the next call.
+ */
+export const resolveActor = (actor: string): Promise<ResolvedActor | null> => {
+  const trimmed = actor.trim().replace(/^@/, "")
+  if (!trimmed) return Promise.resolve(null)
+
+  const cached = actorCache.get(trimmed)
+  if (cached) return cached
+
+  const pending = resolveActorUncached(trimmed)
+  actorCache.set(trimmed, pending)
+  pending.then(
+    (resolved) => resolved || actorCache.delete(trimmed),
+    () => actorCache.delete(trimmed),
+  )
+  return pending
+}
+
+/** Test seam: drop memoised resolutions so one test's mock cannot shadow the next's. */
+export const __resetActorCache = () => actorCache.clear()
 
 /** The public, unauthenticated URL a blob is served from. */
 export const blobUrl = ({ pds, did, cid }: { pds: string; did: string; cid: string }): string => {

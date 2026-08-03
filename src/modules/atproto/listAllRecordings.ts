@@ -38,17 +38,9 @@ const feedUrl = (cursor?: string): string => {
   return `${APPVIEW_BASE}/recordings?${query}`
 }
 
-// A DID's PDS never moves within a session; resolve each once and reuse across pages.
-const pdsCache = new Map<string, string | null>()
-
-const pdsFor = async (did: string): Promise<string | null> => {
-  const cached = pdsCache.get(did)
-  if (cached !== undefined) return cached
-  const resolved = await resolveActor(did)
-  const pds = resolved?.pds ?? null
-  pdsCache.set(did, pds)
-  return pds
-}
+// resolveActor memoises per DID (and collapses the concurrent burst a single page of
+// same-author rows would otherwise fire), so there is no separate PDS cache to keep here.
+const pdsFor = async (did: string): Promise<string | null> => (await resolveActor(did))?.pds ?? null
 
 const toListen = (row: AppviewRecording, pds: string): ListenRecording => {
   const value: Recording = {
