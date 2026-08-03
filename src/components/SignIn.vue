@@ -7,6 +7,11 @@ const { handle, avatarUrl, prefillHandle, isLoggedIn, isReady, signIn, signOut }
 
 const inputHandle = ref("")
 
+// Set once the browser is on its way to Bluesky. The redirect replaces the page, so this
+// only resets if signInWithHandle rejects before it can navigate. It tells "we're going"
+// apart from a stale, idle box that otherwise looks identical.
+const redirecting = ref(false)
+
 // A remanso.space cross-link may set the prefill after this component mounts.
 watch(
   prefillHandle,
@@ -16,9 +21,16 @@ watch(
   { immediate: true },
 )
 
-const onSignIn = () => {
+const onSignIn = async () => {
   const value = inputHandle.value.trim()
-  if (value) signIn(value)
+  if (!value || redirecting.value) return
+  redirecting.value = true
+  try {
+    await signIn(value)
+  } catch (error) {
+    console.warn("SignIn: sign-in redirect failed", error)
+    redirecting.value = false
+  }
 }
 </script>
 
@@ -41,9 +53,12 @@ const onSignIn = () => {
         autocorrect="off"
         spellcheck="false"
         placeholder="alice.bsky.social"
+        :disabled="redirecting"
         @keyup.enter="onSignIn"
       />
-      <button type="button" class="signin-go" @click="onSignIn">Sign in</button>
+      <button type="button" class="signin-go" :disabled="redirecting" @click="onSignIn">
+        {{ redirecting ? "Redirecting…" : "Sign in" }}
+      </button>
     </div>
   </div>
 </template>
