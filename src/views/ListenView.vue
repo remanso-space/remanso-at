@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue"
-import { RouterLink, useRoute } from "vue-router"
+import { RouterLink, useRoute, useRouter } from "vue-router"
 
 import { useSession } from "../composables/useSession"
 import { listAllRecordings } from "../modules/atproto/listAllRecordings"
@@ -12,6 +12,7 @@ import { formatDuration } from "../utils/formatDuration"
 // no handle, or an explicit `?all=1` — the everyone feed comes from the appview, the only
 // place that has seen every author's recordings.
 const route = useRoute()
+const router = useRouter()
 const { did, handle, isLoggedIn } = useSession()
 
 const wantsEveryone = computed(() => route.query.all === "1")
@@ -34,6 +35,26 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref<string | null>(null)
 const shownHandle = ref<string | null>(null)
+
+// The search box. Suggestions are the handles we have resolved this session — every repo
+// you visit is remembered, plus your own — so the datalist behaves like a select of people
+// you already know, while still letting you type any new handle by hand.
+const search = ref("")
+const knownHandles = ref<string[]>([])
+
+const rememberHandle = (h: string | null | undefined) => {
+  const trimmed = h?.trim()
+  if (trimmed && !knownHandles.value.includes(trimmed)) knownHandles.value.push(trimmed)
+}
+
+const submitSearch = () => {
+  const asked = search.value.trim()
+  if (!asked) {
+    void router.push({ path: "/listen", query: { all: "1" } })
+    return
+  }
+  void router.push({ path: "/listen", query: { handle: asked } })
+}
 
 // A monotonic token: a slower earlier load must never overwrite a newer scope's results,
 // and the everyone feed has no actor to compare, so a counter covers both scopes.
@@ -79,6 +100,7 @@ const load = async () => {
   recordings.value = result.recordings
   cursor.value = result.cursor
   shownHandle.value = result.actor.handle
+  rememberHandle(result.actor.handle)
 }
 
 const loadMore = async () => {
@@ -97,14 +119,27 @@ const loadMore = async () => {
   cursor.value = result.cursor
 }
 
-onMounted(() => void load())
+const syncSearch = () => {
+  rememberHandle(handle.value)
+  // Show the handle in focus, not the raw DID — a repo opened by ?did= still reads back as
+  // its handle once resolved. The everyone feed leaves the box empty.
+  search.value = mode.value === "repo" ? (shownHandle.value ?? requested.value) : ""
+}
 
-watch([requested, wantsEveryone], () => {
+onMounted(async () => {
+  await load()
+  syncSearch()
+})
+
+watch([requested, wantsEveryone], async () => {
   recordings.value = []
   cursor.value = undefined
   shownHandle.value = null
-  void load()
+  await load()
+  syncSearch()
 })
+
+watch(handle, (h) => rememberHandle(h))
 
 const whose = computed(() => {
   if (mode.value === "everyone") return "everyone"
@@ -136,14 +171,32 @@ const titleOf = (recording: ListenRecording) =>
 
       <p v-if="mode === 'everyone'" class="page-lede">
         Newest first, and no account needed to listen. The audio comes straight from the account of
-        whoever recorded it. To follow one person instead, put their handle in the address:
-        <code class="mono">?handle=you.example.com</code>.
+        whoever recorded it. To follow one person, search their handle below.
       </p>
       <p v-else class="page-lede">
         Newest first, and no account needed to listen. Each one keeps a link back to the note it
         belongs to on <a href="https://remanso.space">remanso.space</a>, which stays home for the
         writing.
       </p>
+
+      <form class="search" role="search" @submit.prevent="submitSearch">
+        <input
+          v-model="search"
+          class="search-input mono"
+          type="search"
+          name="handle"
+          list="handle-suggestions"
+          placeholder="a handle, e.g. you.example.com"
+          aria-label="Search recordings by handle"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+        <datalist id="handle-suggestions">
+          <option v-for="h in knownHandles" :key="h" :value="h"></option>
+        </datalist>
+        <button class="search-go" type="submit">Listen</button>
+      </form>
 
       <template>
         <p class="whose mono">
@@ -262,6 +315,44 @@ const titleOf = (recording: ListenRecording) =>
   color: var(--hw-pink-deep);
   padding: 0.05em 0.35em;
   border-radius: 3px;
+}
+
+.search {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0 0 2rem;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.95rem;
+  border: 1px solid var(--hw-rule);
+  border-radius: 6px;
+  background: var(--hw-surface);
+  color: inherit;
+  padding: 0.55rem 0.8rem;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--hw-pink-deep);
+}
+
+.search-go {
+  font: inherit;
+  font-size: 0.95rem;
+  border: 1px solid var(--hw-pink-deep);
+  border-radius: 6px;
+  background: var(--hw-pink-deep);
+  color: var(--hw-surface);
+  padding: 0.55rem 1.2rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.search-go:hover {
+  opacity: 0.9;
 }
 
 .page-note {
