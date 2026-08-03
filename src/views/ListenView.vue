@@ -29,7 +29,7 @@ const requested = computed(() => {
 })
 
 const mode = computed<"everyone" | "repo">(() => (requested.value ? "repo" : "everyone"))
-const isOwnRepo = computed(() => !!did.value && requested.value === did.value)
+const isOwnRepo = computed(() => !!did.value && shownDid.value === did.value)
 
 const recordings = ref<ListenRecording[]>([])
 const cursor = ref<string | undefined>(undefined)
@@ -37,6 +37,10 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref<string | null>(null)
 const shownHandle = ref<string | null>(null)
+// The DID the shown repo actually resolves to. `requested` holds the raw search string (a
+// handle when you type one), which never equals a `did:` — so ownership is judged against the
+// resolved DID, not the string. Null in the everyone feed.
+const shownDid = ref<string | null>(null)
 
 // The search box. Suggestions come from the network — the public appview's typeahead over
 // every atproto handle — so someone else's recordings are findable without knowing their
@@ -151,12 +155,14 @@ const load = async () => {
     if (!result.ok) {
       recordings.value = []
       cursor.value = undefined
+      shownDid.value = null
       error.value = errorFor(result.reason, detailOf(result))
       return
     }
     recordings.value = result.recordings
     cursor.value = result.cursor
     shownHandle.value = null
+    shownDid.value = null
     return
   }
 
@@ -166,12 +172,14 @@ const load = async () => {
   if (!result.ok) {
     recordings.value = []
     cursor.value = undefined
+    shownDid.value = null
     error.value = errorFor(result.reason, detailOf(result))
     return
   }
   recordings.value = result.recordings
   cursor.value = result.cursor
   shownHandle.value = result.actor.handle
+  shownDid.value = result.actor.did
 }
 
 const loadMore = async () => {
@@ -207,6 +215,7 @@ watch([requested, wantsEveryone], async () => {
   recordings.value = []
   cursor.value = undefined
   shownHandle.value = null
+  shownDid.value = null
   await load()
   syncSearch()
 })
