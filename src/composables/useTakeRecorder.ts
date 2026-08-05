@@ -274,6 +274,10 @@ export const useTakeRecorder = () => {
     isRecording.value = false
     setRecording(false)
     levels.value = Array.from({ length: LEVEL_BARS }, () => 0)
+    // Back to 0:00 with the meters. A frozen clock reads as "still running, just stalled",
+    // and the next take's length is the only thing that counter can honestly show. The
+    // take's own durationSec is measured in stop() before this, so nothing is lost.
+    elapsedSec.value = 0
   }
 
   onScopeDispose(() => {

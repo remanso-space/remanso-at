@@ -90,6 +90,26 @@ describe("useTakeRecorder", () => {
     expect(isRecording.value).toBe(false)
   })
 
+  // A clock left frozen on the last take's length reads as a recorder still running, and
+  // it is the wrong number for the next take either way.
+  it("returns the clock to 0 when the take stops", async () => {
+    // The real loop reschedules itself forever, so collect the frames and run one by hand.
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb))
+    const now = vi.spyOn(performance, "now")
+    now.mockReturnValueOnce(0) // the take starts at t=0
+    now.mockReturnValue(12_000) // …and every reading after it is 12s in
+    const recorder = withRecorder((r) => r)
+
+    await recorder.start()
+    frames[0]?.(0)
+    expect(recorder.elapsedSec.value).toBe(12)
+
+    await expect(recorder.stop()).resolves.toMatchObject({ durationSec: 12 })
+    expect(recorder.elapsedSec.value).toBe(0)
+    now.mockRestore()
+  })
+
   it("clears the recording flag even when sealing the take file fails", async () => {
     const { isRecording } = useRecordingState()
     writer.close.mockRejectedValueOnce(new Error("quota exceeded"))
