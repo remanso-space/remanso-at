@@ -23,7 +23,7 @@ import {
   speechDurationSec,
 } from "../../modules/studio/edl"
 import type { Session, Take } from "../../modules/studio/edl.types"
-import { readTakeFile } from "../../modules/studio/opfsTakes"
+import { SESSION_SAMPLE_RATE } from "../../modules/studio/edl.types"
 import { formatDuration } from "../../utils/formatDuration"
 import TakeWaveform from "./TakeWaveform.vue"
 
@@ -40,6 +40,11 @@ const props = defineProps<{
   analyses: Record<string, TakeAnalysis>
   selectedTakeId: string
   canUndo: boolean
+  // The take decoded to mono PCM at SESSION_SAMPLE_RATE. Playback runs off this through
+  // WebAudio rather than an <audio> element on the compressed take: a MediaRecorder blob
+  // carries no seek index, so seeking and replay stall while the decoder scans for a
+  // keyframe. From PCM every seek is a sample offset — instant, and instantly replayable.
+  pcm?: Float32Array | null
 }>()
 
 const emit = defineEmits<{
@@ -49,11 +54,9 @@ const emit = defineEmits<{
   "update:selectedTakeId": [takeId: string]
 }>()
 
-const audio = ref<HTMLAudioElement | null>(null)
-const takeUrl = ref<string | null>(null)
 const playheadSec = ref(0)
-/** Signed shuttle rate; 0 is paused. Negative runs backwards by seeking, which is the
- *  only reverse a media element offers. */
+/** Signed shuttle rate; 0 is paused. Negative scrubs backwards by walking the playhead in
+ *  JS with no sound — reverse audio a media element cannot do, and reverse is for looking. */
 const rate = ref(0)
 const inSec = ref<number | null>(null)
 const outSec = ref<number | null>(null)
@@ -75,73 +78,99 @@ const hasRegion = computed(
 )
 const programmeSec = computed(() => speechDurationSec(props.session))
 
-const revokeUrl = () => {
-  if (takeUrl.value) URL.revokeObjectURL(takeUrl.value)
-  takeUrl.value = null
+// ── transport ───────────────────────────────────────────────────────────────────────
+// Playback is WebAudio off the take's decoded PCM. Forward runs a one-shot buffer source
+// and reads position off the audio clock; reverse and pause walk the playhead in JS. Every
+// seek is a fresh source started at a sample offset, so there is no decoder stall to wait on.
+
+let ctx: AudioContext | null = null
+let buffer: AudioBuffer | null = null
+let node: AudioBufferSourceNode | null = null
+// Anchors for the forward audio clock: position = anchorSec + (ctx.currentTime - anchorCtx) * rate.
+let anchorCtx = 0
+let anchorSec = 0
+
+const durationSec = () => selectedTake.value?.durationSec ?? 0
+
+const ensureBuffer = () => {
+  if (buffer) return
+  const pcm = props.pcm
+  if (!pcm || pcm.length === 0) return
+  if (!ctx) ctx = new AudioContext({ sampleRate: SESSION_SAMPLE_RATE })
+  buffer = ctx.createBuffer(1, pcm.length, SESSION_SAMPLE_RATE)
+  buffer.copyToChannel(pcm, 0)
 }
 
+const stopNode = () => {
+  if (!node) return
+  // Drop onended before stopping: it is only meant to fire when playback runs off the end,
+  // not when we tear a source down to re-seek or pause.
+  node.onended = null
+  try {
+    node.stop()
+  } catch {
+    // A source that never started (or already ended) throws on stop(); nothing to do.
+  }
+  node.disconnect()
+  node = null
+}
+
+// Start forward playback from `fromSec`. A source node is single-use, so seeking and
+// shuttle-rate changes all route through here — each is just a new source at a new offset.
+const startPlayback = (fromSec: number) => {
+  ensureBuffer()
+  stopNode()
+  if (!ctx || !buffer || rate.value <= 0) return
+  if (ctx.state === "suspended") void ctx.resume()
+  if (fromSec >= buffer.duration) {
+    rate.value = 0
+    return
+  }
+  node = ctx.createBufferSource()
+  node.buffer = buffer
+  node.playbackRate.value = rate.value
+  node.connect(ctx.destination)
+  node.onended = () => {
+    rate.value = 0
+  }
+  anchorCtx = ctx.currentTime
+  anchorSec = fromSec
+  node.start(0, fromSec)
+}
+
+const applyRate = () => {
+  if (rate.value > 0) startPlayback(playheadSec.value)
+  else stopNode() // 0 = paused, negative = silent reverse scrub in the frame loop
+}
+
+// Sync flush so the source starts inside the click that set the rate — a microtask later can
+// fall outside the user-gesture window some autoplay policies check to resume the context.
+watch(rate, applyRate, { flush: "sync" })
+
+const seek = (sec: number) => {
+  const clamped = Math.max(0, Math.min(durationSec(), sec))
+  playheadSec.value = clamped
+  // Re-anchor a running forward playback to the new point; paused or reversing, the marker
+  // just moves and the next play picks it up.
+  if (rate.value > 0) startPlayback(clamped)
+}
+
+const togglePlay = () => (rate.value = rate.value === 0 ? 1 : 0)
+const shuttle = (direction: 1 | -1) => (rate.value = nextShuttleRate(rate.value, direction))
+
+// Rebuild against the newly selected take's PCM and rewind the transport.
 watch(
   selectedTake,
-  async (take) => {
-    revokeUrl()
+  () => {
+    stopNode()
+    buffer = null
     rate.value = 0
     playheadSec.value = 0
     inSec.value = null
     outSec.value = null
-    if (!take) return
-    const file = await readTakeFile(take.opfsPath)
-    if (file) takeUrl.value = URL.createObjectURL(file)
   },
   { immediate: true },
 )
-
-// ── transport ───────────────────────────────────────────────────────────────────────
-
-const seek = (sec: number) => {
-  const el = audio.value
-  const clamped = Math.max(0, Math.min(selectedTake.value?.durationSec ?? 0, sec))
-  playheadSec.value = clamped
-  if (el) el.currentTime = clamped
-}
-
-// Each play/pause bumps this. A play() interrupted by a later pause() (pausing, or
-// shuttling backward) rejects with an AbortError long after the fact; without a token that
-// stale rejection would reset `rate` to 0 and cancel whatever the user just started — the
-// button "doing something" after a first play, and reverse dying the instant you shuttle
-// back off a forward play.
-let transportGen = 0
-
-const applyRate = () => {
-  const el = audio.value
-  if (!el) return
-  const gen = (transportGen += 1)
-  if (rate.value > 0) {
-    el.playbackRate = rate.value
-    // Start from the cursor, not from wherever the element happens to sit. A waveform click
-    // sets `playheadSec` and the element's currentTime together, but a currentTime set issued
-    // before the element is seekable is silently dropped — so without this, play would begin
-    // at 0. Only re-pin when starting from a stop: mid-playback the two already track (the
-    // frame loop syncs them), and re-seeking there would stutter on a shuttle-rate change.
-    if (el.paused && Math.abs(el.currentTime - playheadSec.value) > 0.01)
-      el.currentTime = playheadSec.value
-    // Wrapped rather than chained: a media element that refuses to play may return
-    // nothing at all instead of a rejected promise. Only a still-current, still-forward
-    // play that genuinely failed drops the transport to paused.
-    void Promise.resolve(el.play()).catch(() => {
-      if (gen === transportGen && rate.value > 0) rate.value = 0
-    })
-  } else {
-    el.pause()
-  }
-}
-
-// Sync flush so the play()/pause() lands inside the click that set the rate — a microtask
-// later can fall outside the user-gesture window some autoplay policies check, and the
-// button feels laggy waiting for it.
-watch(rate, applyRate, { flush: "sync" })
-
-const togglePlay = () => (rate.value = rate.value === 0 ? 1 : 0)
-const shuttle = (direction: 1 | -1) => (rate.value = nextShuttleRate(rate.value, direction))
 
 let raf = 0
 let lastFrameMs = 0
@@ -149,31 +178,34 @@ let lastFrameMs = 0
 const frame = (now: number) => {
   const dt = lastFrameMs ? (now - lastFrameMs) / 1000 : 0
   lastFrameMs = now
-  const el = audio.value
+  const dur = durationSec()
 
-  // Reverse by seeking, but keep the playhead as the source of truth and let the element
-  // follow it. Reading el.currentTime back each frame stalls: a paused element mid-seek
-  // still reports its old position, so `el.currentTime + rate*dt` keeps subtracting from
-  // the same value and the marker never moves. Accumulate in JS instead.
-  if (el && rate.value < 0) {
-    const next = Math.max(0, playheadSec.value + rate.value * dt)
-    playheadSec.value = next
-    el.currentTime = next
-    if (next <= 0) rate.value = 0
-  }
-  // Forward, the element genuinely plays, so it leads and the playhead follows. Paused, the
-  // marker is whatever the last seek or jump set — a media element that quietly refuses to
-  // move must not drag it back to zero under the cursor.
-  if (el && rate.value > 0) {
+  if (rate.value > 0 && ctx && node) {
+    let pos = anchorSec + (ctx.currentTime - anchorCtx) * rate.value
     // Playback hears the programme, not the tape: while running forward, jump whatever the
-    // EDL has removed. (Reverse scrubbing is left alone above, so you can still look at a
-    // rejected region before putting it back.)
+    // EDL has removed. (Reverse is left alone below, so you can still look at a rejected
+    // region before putting it back.)
     if (skipRemoved.value) {
-      const next = nextKeptSec(kept.value, el.currentTime)
+      const next = nextKeptSec(kept.value, pos)
       if (next === null) rate.value = 0
-      else if (next > el.currentTime + 0.02) el.currentTime = next
+      else if (next > pos + 0.02) {
+        startPlayback(next)
+        pos = next
+      }
     }
-    playheadSec.value = el.currentTime
+    if (rate.value > 0) {
+      if (pos >= dur) {
+        rate.value = 0
+        pos = dur
+      }
+      playheadSec.value = Math.min(dur, pos)
+    }
+  } else if (rate.value < 0) {
+    // Reverse scrub: no reverse audio, just walk the marker back off its own last value so a
+    // stalled clock can never freeze it.
+    const pos = Math.max(0, playheadSec.value + rate.value * dt)
+    playheadSec.value = pos
+    if (pos <= 0) rate.value = 0
   }
   raf = requestAnimationFrame(frame)
 }
@@ -322,7 +354,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown)
   cancelAnimationFrame(raf)
-  revokeUrl()
+  stopNode()
+  void ctx?.close()
 })
 
 const lufsLabel = (takeId: string): string => {
@@ -396,8 +429,6 @@ const lufsLabel = (takeId: string): string => {
           }
         "
       />
-
-      <audio ref="audio" :src="takeUrl ?? undefined" class="offstage" preload="auto" />
 
       <div class="transport">
         <span class="clock mono">{{ formatDuration(playheadSec) ?? "0:00" }}</span>
@@ -642,11 +673,5 @@ const lufsLabel = (takeId: string): string => {
   margin: 0.9rem 0 0;
   font-size: 0.72rem;
   color: var(--hw-ink-faint);
-}
-.offstage {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  clip-path: inset(50%);
 }
 </style>

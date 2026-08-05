@@ -562,6 +562,7 @@ const copyLink = async () => {
             v-model:selected-take-id="selectedTakeId"
             :session="session"
             :analyses="analyses"
+            :pcm="takePcm[selectedTakeId] ?? null"
             :can-undo="canUndo"
             @edit="edit"
             @undo="history = undo(history)"
