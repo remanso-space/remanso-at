@@ -200,6 +200,21 @@ const shownNotes = computed(() => {
 const noteUrl = (did: string, rkey: string) =>
   `https://remanso.space/pub/${toShortDid(did)}/${rkey}`
 
+/**
+ * Where a note of yours reads on the web. Browsing a title is often not enough to know
+ * which note it is, so every row opens in a new tab — the studio session, half-recorded,
+ * must survive the look. The did comes off the note's own uri rather than the session so
+ * a malformed uri cannot take the whole list down with a throw.
+ */
+const publicNoteUrl = (note: PublishedNote): string => {
+  try {
+    const { did: noteDid, rkey } = parseAtUri(note.record.uri)
+    return noteUrl(noteDid, rkey)
+  } catch {
+    return ""
+  }
+}
+
 const pickNote = (note: PublishedNote) => {
   title.value = note.record.value.title
   pickedUri.value = note.record.uri
@@ -412,7 +427,19 @@ const copyLink = async () => {
               </div>
 
               <p v-if="pickedNote" class="picked-line mono" role="status">
-                Recording for “{{ pickedNote.record.value.title }}”.
+                <span>
+                  Recording for
+                  <a
+                    v-if="publicNoteUrl(pickedNote)"
+                    class="picked-link"
+                    :href="publicNoteUrl(pickedNote)"
+                    target="_blank"
+                    rel="noopener"
+                    title="Read on remanso.space (new tab)"
+                    >“{{ pickedNote.record.value.title }}” ↗</a
+                  >
+                  <template v-else>“{{ pickedNote.record.value.title }}”</template>.
+                </span>
                 <button class="link-btn mono" @click="detachNote">Detach</button>
               </p>
 
@@ -456,6 +483,16 @@ const copyLink = async () => {
                         aria-label="No audio yet"
                         title="No audio yet"
                         >—</span
+                      >
+                      <a
+                        v-if="publicNoteUrl(n)"
+                        class="note-open mono"
+                        :href="publicNoteUrl(n)"
+                        target="_blank"
+                        rel="noopener"
+                        :aria-label="`Read “${n.record.value.title}” on remanso.space (new tab)`"
+                        title="Read on remanso.space (new tab)"
+                        >↗</a
                       >
                     </li>
                   </ul>
@@ -1024,6 +1061,24 @@ const copyLink = async () => {
    near-white that stays legible either way. */
 .audio-flag-mute {
   color: var(--hw-ink);
+}
+/* The arrow off to the row's edge: reachable, never louder than the title it follows. */
+.note-open {
+  color: var(--link-accent);
+  font-size: 0.85rem;
+  text-decoration: none;
+  padding: 0 0.15rem;
+}
+.note-open:hover {
+  color: var(--hw-pink-deep);
+}
+.note-open:focus-visible {
+  outline: 2px solid var(--hw-pink);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.picked-link {
+  color: inherit;
 }
 .picked-line {
   display: flex;
