@@ -180,11 +180,20 @@ watch(isLoggedIn, (yes) => {
   if (yes) void loadNotes()
 })
 
-// The title field sits far above the note list, so a pick has to report itself down here:
-// the row stays marked and the confirmation line names what the title became.
+// The note is the thing being recorded for, so it sits with the title it fills rather than
+// at the foot of the page. Once picked, the list folds away to a single line — the pick is
+// the answer to "what is this take for", and the browse UI has served its purpose.
 const pickedUri = ref("")
 const pickedNote = computed(() => notes.value.find((n) => n.record.uri === pickedUri.value))
-const pickedTitle = computed(() => pickedNote.value?.record.value.title ?? "")
+
+// Browsing is the default until a note is picked; afterwards it is reopened on demand.
+const browsing = ref(false)
+const noteFilter = ref("")
+const shownNotes = computed(() => {
+  const query = noteFilter.value.trim().toLowerCase()
+  if (!query) return notes.value
+  return notes.value.filter((n) => n.record.value.title.toLowerCase().includes(query))
+})
 
 // remanso.space routes a public note at /pub/:shortDid/:rkey/:slug? — the slug is
 // decorative, so the two-segment form is enough to land on the note.
@@ -194,6 +203,14 @@ const noteUrl = (did: string, rkey: string) =>
 const pickNote = (note: PublishedNote) => {
   title.value = note.record.value.title
   pickedUri.value = note.record.uri
+  browsing.value = false
+  noteFilter.value = ""
+}
+
+/** Record with no note behind it: the publish then hands back a link to paste instead. */
+const detachNote = () => {
+  pickedUri.value = ""
+  browsing.value = true
 }
 
 const startRecording = async () => {
@@ -372,11 +389,86 @@ const copyLink = async () => {
             Signed in as <span class="mono">{{ handle }}</span>
           </p>
 
-          <!-- Take title, prefilled from a picked note -->
-          <label class="field">
-            <span class="field-label">Episode title</span>
-            <input v-model="title" class="field-input" placeholder="Untitled" />
-          </label>
+          <!-- What this take is for: the note and the title it fills, side by side, because
+               the usual order is "I wrote this note, now I record it". Browsing stays one
+               click away for the other order: record first, attach afterwards. -->
+          <div class="target">
+            <label class="field">
+              <span class="field-label">Episode title</span>
+              <input v-model="title" class="field-input" placeholder="Untitled" />
+            </label>
+
+            <div class="notes">
+              <div class="notes-head">
+                <p class="hw-label">§ — your notes</p>
+                <button
+                  v-if="pickedNote"
+                  class="link-btn mono"
+                  :aria-expanded="browsing"
+                  @click="browsing = !browsing"
+                >
+                  {{ browsing ? "Close list" : "Change note" }}
+                </button>
+              </div>
+
+              <p v-if="pickedNote" class="picked-line mono" role="status">
+                Recording for “{{ pickedNote.record.value.title }}”.
+                <button class="link-btn mono" @click="detachNote">Detach</button>
+              </p>
+
+              <template v-if="browsing || !pickedNote">
+                <p v-if="loadingNotes" class="status-line">Loading…</p>
+                <p v-else-if="notesError" class="error">{{ notesError }}</p>
+                <template v-else-if="notes.length">
+                  <input
+                    v-model="noteFilter"
+                    class="field-input note-filter mono"
+                    type="search"
+                    placeholder="filter your notes by title"
+                    aria-label="Filter your notes by title"
+                  />
+                  <ul v-if="shownNotes.length" class="note-list">
+                    <li
+                      v-for="n in shownNotes"
+                      :key="n.record.uri"
+                      class="note-item"
+                      :class="{ picked: n.record.uri === pickedUri }"
+                    >
+                      <button
+                        class="note-pick"
+                        :aria-pressed="n.record.uri === pickedUri"
+                        @click="pickNote(n)"
+                      >
+                        {{ n.record.value.title }}
+                      </button>
+                      <span
+                        v-if="n.hasAudio"
+                        class="audio-flag mono"
+                        role="img"
+                        aria-label="Already has audio"
+                        title="Already has audio"
+                        >♪</span
+                      >
+                      <span
+                        v-else
+                        class="audio-flag audio-flag-mute mono"
+                        role="img"
+                        aria-label="No audio yet"
+                        title="No audio yet"
+                        >—</span
+                      >
+                    </li>
+                  </ul>
+                  <p v-else class="status-line">No note matches “{{ noteFilter }}”.</p>
+                </template>
+                <p v-else class="status-line">No published notes found on your PDS.</p>
+                <p class="hint">
+                  Picking a note prefills the title and attaches the recording to that note. With no
+                  note picked you get {{ recordingAltFor("title") }} to paste instead.
+                </p>
+              </template>
+            </div>
+          </div>
 
           <!-- The recorder -->
           <div class="recorder">
@@ -571,53 +663,6 @@ const copyLink = async () => {
               </template>
             </div>
           </div>
-
-          <!-- Your published notes: pick one to record against -->
-          <div class="notes">
-            <p class="hw-label">§ — your notes</p>
-            <p v-if="loadingNotes" class="status-line">Loading…</p>
-            <p v-else-if="notesError" class="error">{{ notesError }}</p>
-            <ul v-else-if="notes.length" class="note-list">
-              <li
-                v-for="n in notes"
-                :key="n.record.uri"
-                class="note-item"
-                :class="{ picked: n.record.uri === pickedUri }"
-              >
-                <button
-                  class="note-pick"
-                  :aria-pressed="n.record.uri === pickedUri"
-                  @click="pickNote(n)"
-                >
-                  {{ n.record.value.title }}
-                </button>
-                <span
-                  v-if="n.hasAudio"
-                  class="audio-flag mono"
-                  role="img"
-                  aria-label="Already has audio"
-                  title="Already has audio"
-                  >♪</span
-                >
-                <span
-                  v-else
-                  class="audio-flag audio-flag-mute mono"
-                  role="img"
-                  aria-label="No audio yet"
-                  title="No audio yet"
-                  >—</span
-                >
-              </li>
-            </ul>
-            <p v-else class="status-line">No published notes found on your PDS.</p>
-            <p v-if="pickedTitle" class="picked-line mono" role="status">
-              Title set to “{{ pickedTitle }}”.
-            </p>
-            <p class="hint">
-              Picking a note prefills the title and attaches the recording to that note. With no
-              note picked you get {{ recordingAltFor("title") }} to paste instead.
-            </p>
-          </div>
         </template>
       </template>
 
@@ -674,9 +719,19 @@ const copyLink = async () => {
 .signed-in .mono {
   color: var(--hw-pink-deep);
 }
+/* Title and note picker read as one decision, so they share a box. */
+.target {
+  border: 1px solid var(--hw-rule);
+  border-radius: 6px;
+  padding: 1.25rem;
+  margin: 0 0 2rem;
+}
 .field {
   display: block;
   margin: 0 0 1.5rem;
+}
+.target .field {
+  margin-bottom: 1.1rem;
 }
 .field-label {
   display: block;
@@ -878,13 +933,39 @@ const copyLink = async () => {
   font-size: 1.05rem;
 }
 .notes {
-  margin: 0 0 2rem;
+  margin: 0;
+}
+.notes-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.notes-head .hw-label {
+  margin: 0;
+}
+/* A button that has to read as an aside, not a third action competing with Record. */
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--link-accent);
+  text-decoration: underline;
+}
+.link-btn:hover {
+  color: var(--hw-pink-deep);
+}
+.note-filter {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
 }
 .note-list {
   list-style: none;
-  /* A long PDS scrolls inside the list instead of burying the rest of the page. Roughly ten
-     rows tall; the inline padding keeps focus rings off the scroll edge. */
-  max-height: 20rem;
+  /* A long PDS scrolls inside the list instead of burying the recorder below it. Roughly
+     seven rows tall; the inline padding keeps focus rings off the scroll edge. */
+  max-height: 14rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 0.15rem;
@@ -945,7 +1026,10 @@ const copyLink = async () => {
   color: var(--hw-ink);
 }
 .picked-line {
-  font-size: 0.8rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
   color: var(--hw-pink-deep);
   margin: 0.6rem 0 0;
 }
