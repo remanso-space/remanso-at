@@ -139,7 +139,7 @@ const draw = () => {
   ctx.fillRect(secToX(props.playheadSec), 0, 1.5, HEIGHT)
 }
 
-let dragFrom: number | null = null
+let dragFrom: { sec: number; x: number } | null = null
 
 const secAt = (event: MouseEvent): number => {
   const rect = canvas.value?.getBoundingClientRect()
@@ -147,14 +147,17 @@ const secAt = (event: MouseEvent): number => {
 }
 
 const onDown = (event: MouseEvent) => {
-  dragFrom = secAt(event)
+  dragFrom = { sec: secAt(event), x: event.clientX }
 }
 
 const onUp = (event: MouseEvent) => {
   if (dragFrom === null) return
   const to = secAt(event)
-  // A drag sets the region; a click is a seek. 100 ms of slop so a shaky click still seeks.
-  if (Math.abs(to - dragFrom) > 0.1) emit("region", Math.min(dragFrom, to), Math.max(dragFrom, to))
+  // A drag sets the region; a click is a seek. Slop is measured in pixels, not take-seconds:
+  // xToSec scales by duration, so a seconds threshold shrinks to sub-pixel on a long take and
+  // every click reads as a region — the playhead could never be placed by clicking. 4 px.
+  if (Math.abs(event.clientX - dragFrom.x) > 4)
+    emit("region", Math.min(dragFrom.sec, to), Math.max(dragFrom.sec, to))
   else emit("seek", to)
   dragFrom = null
 }

@@ -151,18 +151,24 @@ const frame = (now: number) => {
   lastFrameMs = now
   const el = audio.value
 
+  // Reverse by seeking, but keep the playhead as the source of truth and let the element
+  // follow it. Reading el.currentTime back each frame stalls: a paused element mid-seek
+  // still reports its old position, so `el.currentTime + rate*dt` keeps subtracting from
+  // the same value and the marker never moves. Accumulate in JS instead.
   if (el && rate.value < 0) {
-    el.currentTime = Math.max(0, el.currentTime + rate.value * dt)
-    if (el.currentTime <= 0) rate.value = 0
+    const next = Math.max(0, playheadSec.value + rate.value * dt)
+    playheadSec.value = next
+    el.currentTime = next
+    if (next <= 0) rate.value = 0
   }
-  // The playhead follows the element only while transport is running. Paused, it is
-  // whatever the last seek or jump set — a media element that quietly refuses to move
-  // must not drag the marker back to zero under the cursor.
-  if (el && rate.value !== 0) {
+  // Forward, the element genuinely plays, so it leads and the playhead follows. Paused, the
+  // marker is whatever the last seek or jump set — a media element that quietly refuses to
+  // move must not drag it back to zero under the cursor.
+  if (el && rate.value > 0) {
     // Playback hears the programme, not the tape: while running forward, jump whatever the
-    // EDL has removed. Left alone while scrubbing back, so you can still look at a
-    // rejected region before putting it back.
-    if (skipRemoved.value && rate.value > 0) {
+    // EDL has removed. (Reverse scrubbing is left alone above, so you can still look at a
+    // rejected region before putting it back.)
+    if (skipRemoved.value) {
       const next = nextKeptSec(kept.value, el.currentTime)
       if (next === null) rate.value = 0
       else if (next > el.currentTime + 0.02) el.currentTime = next
