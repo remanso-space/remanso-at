@@ -2,7 +2,7 @@ import { dbToAmplitude } from "../../utils/loudness"
 import { duckEnvelope } from "./duck"
 import { clipDurationSec, speechTrack } from "./edl"
 import type { Session } from "./edl.types"
-import { cueClipsFromSlots, hasMusic, programmeDurationSec } from "./musicSlots"
+import { applySpeechBreaks, cueClipsFromSlots, hasMusic, programmeDurationSec } from "./musicSlots"
 import { createLimiter, renderProgramme, type RenderResult } from "./renderChain"
 
 // The bridge from the EDL to the renderer. Two tracks, two stages, one sum (plan: slice 6):
@@ -173,16 +173,19 @@ export const renderSession = (
   sampleRate: number,
   cuePcm: CuePcm = {},
 ): SessionRender => {
-  const speech = assembleSpeech(session, takePcm, sampleRate)
+  // Open any real-break silences first, then render the effective timeline: the speech laid
+  // with its gaps, the cues (including a pausing break's own music) landing in them.
+  const eff = applySpeechBreaks(session)
+  const speech = assembleSpeech(eff, takePcm, sampleRate)
   const rendered = renderProgramme(speech, sampleRate, session.chain)
   const durationSec = speech.length / sampleRate
 
-  if (!hasMusic(session)) {
+  if (!hasMusic(eff)) {
     return { ...rendered, durationSec }
   }
 
   const duckEnv = duckEnvelope(speech, sampleRate)
-  const cues = assembleCues(session, cuePcm, duckEnv, sampleRate)
+  const cues = assembleCues(eff, cuePcm, duckEnv, sampleRate)
 
   const mixed = new Float32Array(rendered.samples.length)
   for (let i = 0; i < mixed.length; i += 1) {

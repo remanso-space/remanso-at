@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest"
 
-import { addChapter, addTake, clipDurationSec, clipEndSec, newSession } from "./edl"
+import {
+  addChapter,
+  addTake,
+  clipDurationSec,
+  clipEndSec,
+  newSession,
+  projectChapterToTimeline,
+  speechTrack,
+} from "./edl"
 import type { MusicPick, Session, Take } from "./edl.types"
 import {
   addSlot,
+  applySpeechBreaks,
   clipsForSlot,
   creditsToPublish,
   cueClipsFromSlots,
@@ -253,6 +262,92 @@ describe("the projected cue track", () => {
     let s = addSlot(session, second)
     s = fillSlot(s, second.id, pick(30))
     expect([...musicPathsInUse(s)]).toEqual(["cues/pad.mp3"])
+  })
+})
+
+describe("applySpeechBreaks (real breaks that pause the recording)", () => {
+  // A 60 s take, one filled break on a chapter at 20 s, pausing for `lengthSec`.
+  const breakSession = (lengthSec = 4, atTakeSec = 20): Session => {
+    let s = addTake(newSession("s", "e"), take("t1", 60), "c1")
+    const slot = newSlot("break", "m1")
+    s = addSlot(s, slot)
+    s = fillSlot(s, slot.id, pick(30))
+    s = addChapter(s, { takeId: "t1", atTakeSec })
+    return updateSlot(s, slot.id, {
+      lengthSec,
+      anchor: { kind: "chapter", chapterIndex: 0 },
+      pauseSpeech: true,
+    })
+  }
+
+  it("leaves the session untouched when no break pauses", () => {
+    const off = updateSlot(breakSession(), "m1", { pauseSpeech: false })
+    expect(applySpeechBreaks(off)).toBe(off)
+  })
+
+  it("does not pause a break with no track picked yet", () => {
+    let s = addTake(newSession("s", "e"), take("t1", 60), "c1")
+    s = addSlot(s, newSlot("break", "m1"))
+    s = addChapter(s, { takeId: "t1", atTakeSec: 20 })
+    s = updateSlot(s, "m1", { anchor: { kind: "chapter", chapterIndex: 0 }, pauseSpeech: true })
+    expect(applySpeechBreaks(s)).toBe(s)
+  })
+
+  it("opens a real silence at the break and pushes the rest later", () => {
+    const eff = applySpeechBreaks(breakSession(4, 20))
+    const clips = speechTrack(eff).clips
+    expect(clips.length).toBe(2)
+    expect(clipEndSec(clips[0])).toBeCloseTo(20, 6) // speech stops at the break
+    expect(clips[1].atSec).toBeCloseTo(24, 6) // and resumes 4 s later — a real gap
+    expect(programmeDurationSec(eff)).toBeCloseTo(64, 6)
+  })
+
+  it("plays the break's own music into the gap it opened", () => {
+    const cues = cueClipsFromSlots(applySpeechBreaks(breakSession(4, 20)))
+    expect(cues.length).toBe(1)
+    expect(cues[0].atSec).toBeCloseTo(20, 6)
+    expect(clipEndSec(cues[0])).toBeCloseTo(24, 6)
+  })
+
+  it("moves a later chapter and a speech-end outro past the gap", () => {
+    let s = breakSession(4, 20)
+    s = addChapter(s, { takeId: "t1", atTakeSec: 40 })
+    const outro = newSlot("outro", "m2")
+    s = addSlot(s, outro)
+    s = fillSlot(s, outro.id, pick(30))
+    const eff = applySpeechBreaks(s)
+
+    const later = eff.chapters.find((c) => c.atTakeSec === 40)!
+    expect(projectChapterToTimeline(eff, later)).toBeCloseTo(44, 6)
+    const outroSlot = eff.musicSlots.find((m) => m.id === "m2")!
+    expect(resolveAnchorSec(eff, outroSlot)).toBeCloseTo(64, 6)
+  })
+
+  it("stacks the offsets of two pausing breaks in timeline order", () => {
+    let s = breakSession(4, 20)
+    s = addChapter(s, { takeId: "t1", atTakeSec: 40 })
+    const b2 = newSlot("break", "m2")
+    s = addSlot(s, b2)
+    s = fillSlot(s, b2.id, pick(30))
+    const idx = s.chapters.findIndex((c) => c.atTakeSec === 40)
+    s = updateSlot(s, b2.id, {
+      lengthSec: 6,
+      anchor: { kind: "chapter", chapterIndex: idx },
+      pauseSpeech: true,
+    })
+    const eff = applySpeechBreaks(s)
+
+    expect(programmeDurationSec(eff)).toBeCloseTo(70, 6) // 60 + 4 + 6
+    const cues = cueClipsFromSlots(eff).sort((a, b) => a.atSec - b.atSec)
+    expect(cues[0].atSec).toBeCloseTo(20, 6)
+    expect(cues[1].atSec).toBeCloseTo(44, 6) // 40 shifted by the first 4 s gap
+  })
+
+  it("is idempotent — re-applying opens no further gaps", () => {
+    const once = applySpeechBreaks(breakSession(4, 20))
+    const twice = applySpeechBreaks(once)
+    expect(programmeDurationSec(twice)).toBeCloseTo(programmeDurationSec(once), 6)
+    expect(speechTrack(twice).clips.length).toBe(speechTrack(once).clips.length)
   })
 })
 

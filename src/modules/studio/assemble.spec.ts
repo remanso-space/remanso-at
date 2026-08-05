@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { assembleCues, assembleSpeech, renderSession, type CuePcm, type TakePcm } from "./assemble"
 import { addChapter, addTake, newSession, splitClipAt } from "./edl"
 import type { MusicPick, MusicSlot, Session, Take } from "./edl.types"
-import { addSlot, newSlot, updateSlot } from "./musicSlots"
+import { addSlot, applySpeechBreaks, newSlot, updateSlot } from "./musicSlots"
 
 const SR = 100 // small rate keeps the fixtures readable
 
@@ -64,6 +64,25 @@ describe("assembleSpeech", () => {
     const out = assembleSpeech(s, { t1: ramp(5) }, SR)
 
     expect(Array.from(out)).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it("opens real silence in the speech at a pausing break and lengthens the timeline", () => {
+    // 1 s take (100 samples), a real break at 0.5 s pausing for 0.5 s.
+    let s = addTake(newSession("s", "e"), take("t1", 1), "c1")
+    const slot = newSlot("break", "m1")
+    s = addSlot(s, slot)
+    s = addChapter(s, { takeId: "t1", atTakeSec: 0.5 })
+    s = updateSlot(s, slot.id, {
+      pick: pick(1),
+      lengthSec: 0.5,
+      anchor: { kind: "chapter", chapterIndex: 0 },
+      pauseSpeech: true,
+    })
+    const out = assembleSpeech(applySpeechBreaks(s), { t1: ramp(100) }, SR)
+
+    expect(out.length).toBe(150) // 1 s speech + 0.5 s gap
+    for (let i = 50; i < 100; i += 1) expect(out[i]).toBe(0) // the gap is real silence
+    expect(out[100]).toBe(50) // speech resumes with the source's second half
   })
 
   it("respects a trim: only the in..out window of the source is used", () => {

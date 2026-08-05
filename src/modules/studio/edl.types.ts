@@ -59,6 +59,13 @@ export interface MusicSlot {
   inSec: number
   gainDb: number
   duck: boolean
+  /**
+   * A "real break": open a silence under it. The speech stops at the break, the music plays
+   * into the gap, and the rest of the programme slides later by the break's length — instead
+   * of the music playing over speech that keeps going. Only a `break` acts on it. Optional so
+   * every stored session predating the flag reads as off. See `applySpeechBreaks`.
+   */
+  pauseSpeech?: boolean
   pick: MusicPick | null
 }
 

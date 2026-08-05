@@ -1,4 +1,10 @@
-import { clipEndSec, projectChapterToTimeline, speechDurationSec } from "./edl"
+import {
+  clipEndSec,
+  projectChapterToTimeline,
+  speechDurationSec,
+  speechTrack,
+  splitClipAt,
+} from "./edl"
 import type { Clip, MusicPick, MusicSlot, Session, SlotAnchor, SlotKind } from "./edl.types"
 
 // Music slots and the cue clips they project to (slice 7).
@@ -153,6 +159,72 @@ export const clipsForSlot = (session: Session, slot: MusicSlot): Clip[] => {
     if (last) break
   }
   return clips
+}
+
+// —— Real breaks (slice 7): a break that pauses the recording ——
+//
+// A plain break plays quietly over speech that keeps going. A break with `pauseSpeech` is a
+// real pause: silence opens under it, the music plays into that silence, and everything after
+// — later speech, chapters, other cues — slides later by the break's length. Derived, not
+// stored, exactly like the cue track: toggling `pauseSpeech` off puts the timeline straight
+// back with nothing to undo. The one write path that needs these gaps (the render) calls
+// `applySpeechBreaks` once at its boundary and reads the returned session everywhere.
+
+/** A break asking for a real pause, and actually playing (so the gap and the music appear together). */
+const isPausingBreak = (session: Session, slot: MusicSlot): boolean =>
+  slot.kind === "break" && !!slot.pauseSpeech && playable(session, slot)
+
+/** Split any clip straddling `atSec`, then push it and everything after later by `lengthSec`. */
+const openGap = (clips: Clip[], atSec: number, lengthSec: number, tag: string): Clip[] => {
+  const out: Clip[] = []
+  for (const clip of clips) {
+    if (clip.atSec >= atSec) {
+      out.push({ ...clip, atSec: clip.atSec + lengthSec })
+    } else if (clipEndSec(clip) > atSec) {
+      const [left, right] = splitClipAt(clip, atSec, `${clip.id}:break:${tag}`)
+      out.push(left)
+      if (right) out.push({ ...right, atSec: right.atSec + lengthSec })
+    } else {
+      out.push(clip)
+    }
+  }
+  return out
+}
+
+/**
+ * The effective session once every pausing break has opened its silence. Returns the session
+ * unchanged when no break pauses. Otherwise the speech clips are split-and-shifted to hold the
+ * gaps, and each pausing break is rewritten to an absolute anchor at the gap it opened — so
+ * `cueClipsFromSlots` lands its music in the gap and re-applying the transform is a no-op.
+ * Breaks are processed in timeline order so a second gap sits after the first one has moved it.
+ */
+export const applySpeechBreaks = (session: Session): Session => {
+  const breaks = session.musicSlots
+    .filter((slot) => isPausingBreak(session, slot))
+    .map((slot) => ({ slot, atSec: resolveAnchorSec(session, slot)! }))
+    .sort((a, b) => a.atSec - b.atSec)
+  if (breaks.length === 0) return session
+
+  let clips = speechTrack(session).clips
+  const gapAtBySlot = new Map<string, number>()
+  let offset = 0
+  for (const { slot, atSec } of breaks) {
+    const gapAt = atSec + offset
+    clips = openGap(clips, gapAt, slot.lengthSec, slot.id)
+    gapAtBySlot.set(slot.id, gapAt)
+    offset += slot.lengthSec
+  }
+
+  return {
+    ...session,
+    tracks: session.tracks.map((t) => (t.kind === "speech" ? { ...t, clips } : t)),
+    musicSlots: session.musicSlots.map((slot) => {
+      const gapAt = gapAtBySlot.get(slot.id)
+      return gapAt === undefined
+        ? slot
+        : { ...slot, anchor: { kind: "absolute", atSec: gapAt }, pauseSpeech: false }
+    }),
+  }
 }
 
 /** Every slot's clips, in slot order — the cue track, derived. */

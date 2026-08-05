@@ -7,6 +7,7 @@ import type { MusicSlot, Session, SlotAnchor, SlotKind } from "../../modules/stu
 import { bitrateFor, contentTier, minutesAtTier } from "../../modules/studio/mediaCodec"
 import {
   addSlot,
+  applySpeechBreaks,
   clipsForSlot,
   fillSlot,
   newSlot,
@@ -41,7 +42,8 @@ const emit = defineEmits<{ edit: [session: Session] }>()
 let counter = 0
 const nextId = () => `slot-${Date.now()}-${(counter += 1)}`
 
-const programmeSec = computed(() => programmeDurationSec(props.session))
+// The rendered length, real-break silences included — so the bitrate/minutes budget is honest.
+const programmeSec = computed(() => programmeDurationSec(applySpeechBreaks(props.session)))
 const slots = computed(() => props.session.musicSlots)
 
 /** Where a slot may be anchored: the start, the snap targets derush found, the speech end. */
@@ -90,6 +92,9 @@ const setGain = (slot: MusicSlot, value: string) =>
 const toggleDuck = (slot: MusicSlot) =>
   emit("edit", updateSlot(props.session, slot.id, { duck: !slot.duck }))
 
+const togglePause = (slot: MusicSlot) =>
+  emit("edit", updateSlot(props.session, slot.id, { pauseSpeech: !slot.pauseSpeech }))
+
 const add = (kind: SlotKind) => {
   const slot = newSlot(kind, nextId())
   emit("edit", addSlot(props.session, slot))
@@ -105,6 +110,12 @@ const remove = (slotId: string) => {
 const slotWhere = (slot: MusicSlot): string => {
   const atSec = resolveAnchorSec(props.session, slot)
   if (atSec === null) return "its chapter was edited out"
+  // A real break is a pause: the recording stops here and resumes after the music plays out.
+  if (slot.kind === "break" && slot.pauseSpeech) {
+    const from = formatDuration(atSec) ?? "0:00"
+    const to = formatDuration(atSec + slot.lengthSec) ?? "0:00"
+    return `pauses at ${from} · ${slot.lengthSec}s · resumes ${to}`
+  }
   const parts = clipsForSlot(props.session, slot)
   const looped = parts.length > 1 ? ` · looped ×${parts.length}` : ""
   return `${formatDuration(atSec) ?? "0:00"} · ${slot.lengthSec}s${looped}`
@@ -254,6 +265,16 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
 
           <button class="btn tiny" @click="toggleDuck(slot)">
             {{ slot.duck ? "Duck on" : "Duck off" }}
+          </button>
+          <button
+            v-if="slot.kind === 'break'"
+            class="btn tiny"
+            :class="{ on: slot.pauseSpeech }"
+            :data-test="`pause-${slot.id}`"
+            title="Pause the recording under this break instead of playing over the next phrase"
+            @click="togglePause(slot)"
+          >
+            {{ slot.pauseSpeech ? "Pause on" : "Pause off" }}
           </button>
           <button class="btn tiny danger" @click="remove(slot.id)">Remove</button>
         </div>
@@ -432,6 +453,11 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
 .btn.tiny {
   padding: 0.2rem 0.45rem;
   font-size: 0.7rem;
+}
+.btn.on {
+  color: var(--hw-surface);
+  background: var(--hw-pink);
+  border-color: var(--hw-pink);
 }
 .btn.danger:hover:not(:disabled) {
   color: #c0392b;
