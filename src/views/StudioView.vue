@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 
 import MusicSlotPanel from "../components/studio/MusicSlotPanel.vue"
 import DerushPanel from "../components/studio/DerushPanel.vue"
+import ProgrammeTimeline from "../components/studio/ProgrammeTimeline.vue"
 import { useSession } from "../composables/useSession"
 import { useTakeRecorder } from "../composables/useTakeRecorder"
 import { parseAtUri } from "../modules/atproto/parseAtUri"
@@ -555,6 +556,15 @@ const copyLink = async () => {
             <p v-if="recorder.error.value" class="error">{{ recorder.error.value }}</p>
             <p v-else-if="takeWarning" class="error">{{ takeWarning }}</p>
           </div>
+
+          <!-- Programme overview: chapters and music slots on one clean bar, click to add a
+               break, drag to move it -->
+          <ProgrammeTimeline
+            v-if="session.takes.length && publishState !== 'done'"
+            :session="session"
+            :analyses="analyses"
+            @edit="edit"
+          />
 
           <!-- Derush: the review pass over the EDL -->
           <DerushPanel
