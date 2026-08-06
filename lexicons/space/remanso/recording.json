@@ -41,7 +41,115 @@
               "type": "ref",
               "ref": "#credit"
             }
+          },
+          "language": {
+            "type": "string",
+            "description": "The language spoken in the recording. ISO 639-3, the same code space as space.remanso.note's `language`, so a note and its recording agree on how a language is spelled. A recording whose speech was never identified simply omits this.",
+            "maxLength": 10,
+            "knownValues": [
+              "afr",
+              "ara",
+              "aze",
+              "bel",
+              "ben",
+              "bul",
+              "cat",
+              "ces",
+              "ckb",
+              "cmn",
+              "dan",
+              "deu",
+              "ell",
+              "eng",
+              "est",
+              "eus",
+              "fin",
+              "fra",
+              "hau",
+              "heb",
+              "hin",
+              "hrv",
+              "hun",
+              "hye",
+              "ind",
+              "isl",
+              "ita",
+              "jpn",
+              "kat",
+              "kaz",
+              "kor",
+              "lit",
+              "mar",
+              "mkd",
+              "nld",
+              "nob",
+              "pes",
+              "pol",
+              "por",
+              "ron",
+              "run",
+              "rus",
+              "slk",
+              "spa",
+              "srp",
+              "swe",
+              "tgl",
+              "tur",
+              "ukr",
+              "vie"
+            ]
+          },
+          "transcript": {
+            "type": "ref",
+            "ref": "#transcript"
           }
+        }
+      }
+    },
+    "transcript": {
+      "type": "object",
+      "description": "What was said, as text. A recording is published before anything has transcribed it, so audio with no transcript is the normal starting state rather than an incomplete record — which is why this is optional and written by a later putRecord. `text` is the whole transcript in reading order and is always present; `segments` is that same text cut into timestamped spans. The two never disagree: a client renders either one without reconciling them, and a writer that edits one rewrites both.",
+      "required": ["text", "createdAt"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The transcript in reading order, paragraphs separated by a blank line. Equal to `segments` joined the same way, when segments are present.",
+          "maxLength": 100000
+        },
+        "segments": {
+          "type": "array",
+          "description": "The transcript cut into timestamped spans, one paragraph each — the granularity a reader scans and seeks by, not the two-second slivers a speech model emits. Absent when the audio yielded no usable timestamps, which happens on very short clips.",
+          "maxLength": 4096,
+          "items": {
+            "type": "ref",
+            "ref": "#transcriptSegment"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "datetime",
+          "description": "When this transcript was written, which is later than the recording's own createdAt, and is bumped on every correction."
+        }
+      }
+    },
+    "transcriptSegment": {
+      "type": "object",
+      "description": "One timestamped span of the transcript. Offsets are milliseconds from the start of the audio: the lexicon data model has no float, and rounding to whole seconds would land a seek target after the words the timestamp labels.",
+      "required": ["startMs", "endMs", "text"],
+      "properties": {
+        "startMs": {
+          "type": "integer",
+          "description": "Offset from the start of the audio, in milliseconds.",
+          "minimum": 0
+        },
+        "endMs": {
+          "type": "integer",
+          "description": "Offset from the start of the audio, in milliseconds. Never before `startMs`.",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 10000
         }
       }
     },
