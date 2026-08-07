@@ -97,3 +97,26 @@ Handover: `docs/handover/slice-7-music-slots.md`.
 - [x] `/listen` renders a recording's `credits`. Per-repo path reads them off the record; the
       everyone feed hydrates each appview row via `getRecord` so credits come through there too.
 - [ ] Delete a slot's OPFS track when no other slot plays it (orphans survive today).
+
+## Sign-in moves to vue-atproto-login (DONE 2026-08-07, live-pending)
+
+- [x] `pnpm add vue-atproto-login@0.3.0`; configured once in `main.ts` (`clientId` unchanged,
+      `dev: import.meta.env.DEV`, `autoSignInFromQuery: "handle"`, router-based callback strip).
+- [x] `handleResolver` left at the library default, which 0.3.0 moved from `bsky.social` to
+      `slingshot.microcosm.blue` — the one behavioural change versus the deleted code.
+- [x] Deleted `atprotoOAuth.ts`, `atprotoSession.ts`, `useSession.ts`, `SignIn.vue`. Nothing in
+      the app imports `@atproto/oauth-client-browser` any more.
+- [x] `getActiveSession(did)` keeps its signature, so `uploadRecording` / `deleteRecording` /
+      `publishedNotes` changed one import line each; their specs mock the package instead.
+- [x] Identity cache key still `atproto-session-current` — signed-in users survive the deploy.
+- [x] Paper skin: `--atp-*` re-pointed at `--hw-*` in `style.css`, plus four specificity-safe
+      rules (mono handle face, ink button with pink hover). Class contract specced.
+- [x] `stripCallbackParams.ts` + spec: drops `code`/`state`/`iss` through the router, keeps the
+      app's own params.
+- [x] Gates: **352 tests**, build clean, lint, fmt:check. Main CSS 76.15 → 78.15 kB, main JS
+      427.96 → 437.83 kB, daisyUI class set in the built CSS unchanged.
+- [x] Side fix: `pnpm build` was already red on `main` — `copyToChannel` in `DerushPanel.vue`
+      rejects a bare `Float32Array` under the current lib. Narrowed at the call.
+- [ ] **Live-verify (browser gate):** sign in from the nav (its typeahead is new), refresh,
+      sign out and back in, the `?handle=` cross-link, a publish from `/studio`, and an existing
+      session surviving the deploy without re-consent.

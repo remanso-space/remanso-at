@@ -98,7 +98,10 @@ const ensureBuffer = () => {
   if (!pcm || pcm.length === 0) return
   if (!ctx) ctx = new AudioContext({ sampleRate: SESSION_SAMPLE_RATE })
   buffer = ctx.createBuffer(1, pcm.length, SESSION_SAMPLE_RATE)
-  buffer.copyToChannel(pcm, 0)
+  // A bare `Float32Array` now means `Float32Array<ArrayBufferLike>`, and copyToChannel
+  // rejects a possibly-shared buffer. Every take's PCM is allocated here, never from a
+  // SharedArrayBuffer, so the narrowing is a statement of fact rather than a risk.
+  buffer.copyToChannel(pcm as Float32Array<ArrayBuffer>, 0)
 }
 
 const stopNode = () => {

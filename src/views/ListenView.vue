@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import { RouterLink, useRoute, useRouter } from "vue-router"
+import { useAtprotoLogin } from "vue-atproto-login"
 
-import { useSession } from "../composables/useSession"
 import { deleteRecording } from "../modules/atproto/deleteRecording"
 import { listAllRecordings } from "../modules/atproto/listAllRecordings"
 import { listRecordings, type ListenRecording } from "../modules/atproto/listRecordings"
@@ -15,7 +15,7 @@ import { formatDuration } from "../utils/formatDuration"
 // place that has seen every author's recordings.
 const route = useRoute()
 const router = useRouter()
-const { did, handle, isLoggedIn } = useSession()
+const { did, handle, isLoggedIn } = useAtprotoLogin()
 
 const wantsEveryone = computed(() => route.query.all === "1")
 

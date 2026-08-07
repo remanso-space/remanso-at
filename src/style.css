@@ -103,6 +103,48 @@ a:hover {
   text-decoration: underline;
 }
 
+/* vue-atproto-login ships neutral defaults keyed off --atp-* custom properties, so the whole
+   sign-in reads as paper by re-pointing them at the --hw-* layer. Declared on :root rather
+   than on the nav so a second <AtprotoLogin> anywhere inherits the same skin. */
+:root {
+  --atp-accent: var(--hw-pink-deep);
+  --atp-on-accent: var(--hw-paper);
+  --atp-border: var(--hw-rule);
+  --atp-surface: var(--hw-paper);
+  --atp-radius: 2px;
+  --atp-font-size: 0.85rem;
+}
+
+/* Two things no custom property covers. The handle is typed, so it wants the mono face; and
+   the button is ink with a pink hover, where --atp-accent alone would paint it pink at rest.
+   Three classes deep on purpose: the library's own rules carry a scoping attribute, which
+   out-specifies a single class no matter which stylesheet lands last. */
+.atp-root .atp-form .atp-input {
+  font-family: var(--hw-mono);
+  color: var(--hw-ink);
+}
+
+.atp-root .atp-form .atp-button {
+  font-family: var(--hw-serif);
+  background: var(--hw-ink);
+  border-color: var(--hw-ink);
+}
+
+.atp-root .atp-form .atp-button:hover:not(:disabled) {
+  background: var(--hw-pink-deep);
+  border-color: var(--hw-pink-deep);
+}
+
+.atp-root .atp-signed-in .atp-handle {
+  font-family: var(--hw-mono);
+  color: var(--hw-ink-soft);
+}
+
+.atp-root .atp-loading {
+  font-family: var(--hw-mono);
+  color: var(--hw-ink-faint);
+}
+
 /* Section labels typeset as "§ 01 — ..." in mono, matching remanso.space. */
 .hw-label {
   font-family: var(--font-mono);

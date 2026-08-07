@@ -1,6 +1,6 @@
 import type { PublicNoteBlob } from "./publicNote.types"
 import { RECORDING_COLLECTION, type RecordingCredit } from "./recording.types"
-import { getActiveSession } from "./service/atprotoOAuth"
+import { getActiveSession } from "vue-atproto-login"
 
 interface UploadRecordingParams {
   did: string

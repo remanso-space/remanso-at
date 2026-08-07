@@ -1,5 +1,10 @@
 # Slice 2 — ATProto sign-in
 
+> **The plumbing below has moved.** On 2026-08-07 the OAuth client, the identity cache, the auth
+> composable and `SignIn.vue` were replaced by the `vue-atproto-login` package, which was extracted
+> from exactly this code. The design still reads true; the file names no longer exist. See
+> `docs/handover/vue-atproto-login.md`.
+
 Done 2026-08-03, deployed and verified live. Read slice 0's and slice 1's handovers plus the plan
 doc for the decisions; this file covers only what slice 2 changed and what slice 4 needs to keep
 going.

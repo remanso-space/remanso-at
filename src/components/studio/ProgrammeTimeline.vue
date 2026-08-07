@@ -53,7 +53,9 @@ const slotBlocks = computed<SlotBlock[]>(() =>
   props.session.musicSlots
     .map((slot) => {
       const atSec = resolveAnchorSec(props.session, slot)
-      return atSec === null ? null : { id: slot.id, kind: slot.kind, atSec, lengthSec: slot.lengthSec }
+      return atSec === null
+        ? null
+        : { id: slot.id, kind: slot.kind, atSec, lengthSec: slot.lengthSec }
     })
     .filter((s): s is SlotBlock => s !== null),
 )

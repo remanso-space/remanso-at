@@ -95,7 +95,7 @@ anywhere — so declaring the only scheme that exists is right regardless.
 ask the one question that settles it (theme, DevTools `prefers-color-scheme`, a computed style) —
 Jean answers in a word. Lead with fixes that hold either way. And when a correction arrives, work
 out what exactly was wrong before withdrawing anything: "you were wrong about X" can mean the claim
-was false *or* that I had no business asserting it, and retracting correct technical work on the
+was false _or_ that I had no business asserting it, and retracting correct technical work on the
 second reading costs more than the original overreach.
 
 (Environment facts, once confirmed, belong in memory rather than being re-guessed each session:

@@ -1,5 +1,5 @@
 import { RECORDING_COLLECTION } from "./recording.types"
-import { getActiveSession } from "./service/atprotoOAuth"
+import { getActiveSession } from "vue-atproto-login"
 
 // The other half of the studio: a recording written to the author's PDS can be taken back
 // off it. deleteRecord is authenticated and only ever touches the caller's own repo — the

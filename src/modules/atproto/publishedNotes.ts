@@ -1,4 +1,4 @@
-import { getActiveSession } from "./service/atprotoOAuth"
+import { getActiveSession } from "vue-atproto-login"
 import { parseAtUri } from "./parseAtUri"
 import type { PublicNoteRecord } from "./publicNote.types"
 import { RECORDING_COLLECTION } from "./recording.types"

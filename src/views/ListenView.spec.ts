@@ -29,16 +29,22 @@ vi.mock("../modules/atproto/listRecordings", () => ({
 // Imported by the view but unused on the everyone feed; stubbed to keep the OAuth client out.
 vi.mock("../modules/atproto/deleteRecording", () => ({ deleteRecording: vi.fn() }))
 
-vi.mock("../composables/useSession", () => ({
-  useSession: () => ({
+// Signed out, and resolved: the view renders the everyone feed. Mocking the library keeps
+// its OAuth client — and the configuration it would demand — out of a component test.
+vi.mock("vue-atproto-login", () => ({
+  useAtprotoLogin: () => ({
     did: ref(""),
     handle: ref(""),
-    avatarUrl: ref(null),
+    displayName: ref(null),
+    avatar: ref(null),
+    pds: ref(null),
     prefillHandle: ref(""),
     isLoggedIn: ref(false),
     isReady: ref(true),
     signIn: vi.fn(),
     signOut: vi.fn(),
+    refresh: vi.fn(),
+    getSession: vi.fn(async () => null),
   }),
 }))
 

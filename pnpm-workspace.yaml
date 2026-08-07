@@ -16,3 +16,5 @@ allowBuilds:
   core-js: false
   esbuild: false
   sharp: false
+minimumReleaseAgeExclude:
+  - vue-atproto-login@0.2.0 || 0.3.0

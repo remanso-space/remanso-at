@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { RouterLink, RouterView, useRouter } from "vue-router"
+import { RouterLink, RouterView } from "vue-router"
+import { AtprotoLogin } from "vue-atproto-login"
 
 import NewVersion from "./components/NewVersion.vue"
-import SignIn from "./components/SignIn.vue"
-import { useSession } from "./composables/useSession"
 
-// First call wins: this resolves the OAuth callback and any ?handle= prefill.
-useSession(useRouter())
+// Sign-in is `vue-atproto-login`'s component: the OAuth client, the callback, the identity
+// cache and the handle typeahead all live there. It is configured once in main.ts; nothing
+// here talks to @atproto/oauth-client-browser directly any more.
 
 // Injected at build time from package.json — the version is written in exactly one place.
 const version = __APP_VERSION__
@@ -24,7 +24,7 @@ const version = __APP_VERSION__
         <RouterLink to="/studio" class="navlink">The studio</RouterLink>
         <RouterLink to="/listen" class="navlink">Listen</RouterLink>
         <a href="https://remanso.space" class="navlink">remanso.space</a>
-        <SignIn />
+        <AtprotoLogin with-avatar with-sign-out sign-in-label="Sign in" />
       </div>
     </nav>
 

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
+import { useAtprotoLogin } from "vue-atproto-login"
 
 import MusicSlotPanel from "../components/studio/MusicSlotPanel.vue"
 import DerushPanel from "../components/studio/DerushPanel.vue"
 import ProgrammeTimeline from "../components/studio/ProgrammeTimeline.vue"
-import { useSession } from "../composables/useSession"
 import { useTakeRecorder } from "../composables/useTakeRecorder"
 import { parseAtUri } from "../modules/atproto/parseAtUri"
 import {
@@ -29,7 +29,7 @@ import { renderToPcm, type RenderProgress } from "../modules/studio/renderToPcm"
 import { encodeWav } from "../modules/studio/wav"
 import { formatDuration } from "../utils/formatDuration"
 
-const { isLoggedIn, handle, did } = useSession()
+const { isLoggedIn, handle, did } = useAtprotoLogin()
 const recorder = useTakeRecorder()
 
 type Gate = "checking" | "ok" | "unsupported"

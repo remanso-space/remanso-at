@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { deleteRecording } from "./deleteRecording"
-import { getActiveSession } from "./service/atprotoOAuth"
+import { getActiveSession } from "vue-atproto-login"
 
-vi.mock("./service/atprotoOAuth", () => ({
+vi.mock("vue-atproto-login", () => ({
   getActiveSession: vi.fn(),
 }))
 
