@@ -14,11 +14,16 @@ import {
 } from "../modules/atproto/publishedNotes"
 import { toShortDid } from "../modules/atproto/shortDid"
 import type { TakePcm } from "../modules/studio/assemble"
-import { analyzeTakeFile, type TakeAnalysis } from "../modules/studio/analyzeTake"
+import {
+  analyzeTakeFile,
+  type AnalyzedTake,
+  type TakeAnalysis,
+} from "../modules/studio/analyzeTake"
 import { removeTake as removeTakeFromEdl } from "../modules/studio/derush"
 import { addTake, newSession } from "../modules/studio/edl"
+import { IMPORT_ACCEPT, importTake } from "../modules/studio/importTake"
 import { programmeDurationSec } from "../modules/studio/musicSlots"
-import type { Session } from "../modules/studio/edl.types"
+import type { Session, Take } from "../modules/studio/edl.types"
 import { SESSION_SAMPLE_RATE } from "../modules/studio/edl.types"
 import { canUndo as historyCanUndo, commit, historyOf, undo } from "../modules/studio/history"
 import { canEncodeOpus } from "../modules/studio/mediaCodec"
@@ -238,27 +243,20 @@ const startRecording = async () => {
 }
 
 /**
- * Stop, then run the one decode the rest of the session lives off: peaks for the waveform,
- * pause candidates, speech onsets and a loudness reading, plus the samples publish would
- * otherwise decode a second time. The take is appended either way — a take that failed to
- * analyse is still a take, and losing it to a decoder hiccup would be unforgivable.
+ * The one decode the rest of the session lives off: peaks for the waveform, pause candidates,
+ * speech onsets and a loudness reading, plus the samples publish would otherwise decode a
+ * second time. Null when the bytes could not be decoded at all.
  */
-const stopRecording = async () => {
-  const take = await recorder.stop()
-  if (!take) return
-
+const analyseTake = async (take: Take): Promise<AnalyzedTake | null> => {
   analysing.value = true
   const file = await readTakeFile(take.opfsPath)
   const analyzed = file ? await analyzeTakeFile(file, SESSION_SAMPLE_RATE) : null
   analysing.value = false
+  return analyzed
+}
 
-  if (!analyzed) {
-    takeWarning.value = "That take could not be analysed, so it has no waveform. It is still here."
-    recordTake(addTake(session.value, take, `${take.id}:0`))
-    selectedTakeId.value = take.id
-    return
-  }
-
+/** Bank a decoded take: keep its samples and overlays, write its peaks, append it to the EDL. */
+const bankTake = async (take: Take, analyzed: AnalyzedTake) => {
   const { samples, durationSec, ...analysis } = analyzed
   takePcm[take.id] = samples
   analyses.value = { ...analyses.value, [take.id]: analysis }
@@ -266,6 +264,73 @@ const stopRecording = async () => {
   const peaksPath = await writePeaks(take.id, analysis.peaks).catch(() => "")
   recordTake(addTake(session.value, { ...take, durationSec, peaksPath }, `${take.id}:0`))
   selectedTakeId.value = take.id
+}
+
+/**
+ * Stop and analyse. The take is appended either way — a take that failed to analyse is still
+ * a take (its length was measured off the clock), and losing it to a decoder hiccup would be
+ * unforgivable. An imported file has no such clock, which is why importFile drops instead.
+ */
+const stopRecording = async () => {
+  const take = await recorder.stop()
+  if (!take) return
+
+  const analyzed = await analyseTake(take)
+  if (!analyzed) {
+    takeWarning.value = "That take could not be analysed, so it has no waveform. It is still here."
+    recordTake(addTake(session.value, take, `${take.id}:0`))
+    selectedTakeId.value = take.id
+    return
+  }
+
+  await bankTake(take, analyzed)
+}
+
+// Audio recorded elsewhere — a phone voice memo, a field recorder, a call export — arrives on
+// the second tab and becomes an ordinary take: same OPFS directory, same analysis, same
+// derush, same publish. Recording and importing are two ways in, not two modes of the studio.
+type CaptureMode = "record" | "upload"
+const captureMode = ref<CaptureMode>("record")
+const importing = ref(false)
+const importError = ref<string | null>(null)
+
+const newTakeId = (): string =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `take-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+
+const importFile = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  // Clear the picker so re-picking the same file after a failure still fires a change.
+  input.value = ""
+  if (!file) return
+
+  publishState.value = "idle"
+  link.value = ""
+  attachedTo.value = null
+  takeWarning.value = null
+  importError.value = null
+
+  importing.value = true
+  const result = await importTake(file, newTakeId())
+  if (!result.ok) {
+    importError.value = result.error
+    importing.value = false
+    return
+  }
+
+  const analyzed = await analyseTake(result.take)
+  importing.value = false
+  if (!analyzed) {
+    // A recorded take survives a failed decode on its measured duration; an imported one has
+    // no such length, and a zero-length clip would render silence. Drop the bytes and say so.
+    await deleteTake(result.take.opfsPath)
+    importError.value = `“${file.name}” could not be decoded. Its codec may not be supported here — re-export it as m4a or wav.`
+    return
+  }
+
+  await bankTake(result.take, analyzed)
 }
 
 /**
@@ -307,6 +372,7 @@ const resetSession = async () => {
   link.value = ""
   attachedTo.value = null
   takeWarning.value = null
+  importError.value = null
 }
 
 const publish = async () => {
@@ -508,53 +574,105 @@ const copyLink = async () => {
             </div>
           </div>
 
-          <!-- The recorder -->
-          <div class="recorder">
-            <div class="mic-row">
-              <select
-                class="field-input mic-select"
-                :value="recorder.deviceId.value"
+          <!-- Two ways in, one studio: record here, or bring in audio recorded elsewhere.
+               Both land as ordinary takes, so everything below this box is unchanged. -->
+          <div class="capture">
+            <div class="tabs" role="tablist" aria-label="How the audio gets in">
+              <button
+                class="tab"
+                role="tab"
+                :class="{ on: captureMode === 'record' }"
+                :aria-selected="captureMode === 'record'"
                 :disabled="recorder.isRecording.value"
-                @change="recorder.selectDevice(($event.target as HTMLSelectElement).value)"
+                @click="captureMode = 'record'"
               >
-                <option value="">Default microphone</option>
-                <option v-for="d in recorder.devices.value" :key="d.deviceId" :value="d.deviceId">
-                  {{ d.label || "Microphone" }}
-                </option>
-              </select>
+                Record
+              </button>
+              <button
+                class="tab"
+                role="tab"
+                :class="{ on: captureMode === 'upload' }"
+                :aria-selected="captureMode === 'upload'"
+                :disabled="recorder.isRecording.value"
+                @click="captureMode = 'upload'"
+              >
+                Upload a file
+              </button>
             </div>
 
-            <div class="levels" role="img" aria-label="Microphone level">
-              <span
-                v-for="(lvl, i) in recorder.levels.value"
-                :key="i"
-                class="bar"
-                :style="{ height: `${6 + lvl * 94}%` }"
-              />
+            <div v-show="captureMode === 'upload'" class="panel" role="tabpanel">
+              <label class="field upload-field">
+                <span class="field-label">Audio file</span>
+                <input
+                  class="field-input file-input"
+                  type="file"
+                  :accept="IMPORT_ACCEPT"
+                  :disabled="importing || analysing"
+                  @change="importFile"
+                />
+              </label>
+              <p class="hint">
+                m4a (a phone voice memo is exactly this), mp3, wav, ogg/opus, flac and webm all come
+                in as they are — nothing is re-encoded until you publish. The file becomes a take:
+                derush it, put music under it, publish it.
+              </p>
+              <p v-if="importing || analysing" class="status-line" role="status">
+                Reading the file…
+              </p>
+              <p v-if="importError" class="error">{{ importError }}</p>
             </div>
 
-            <div class="transport">
-              <span class="elapsed mono">{{
-                formatDuration(recorder.elapsedSec.value) ?? "0:00"
-              }}</span>
-              <template v-if="!recorder.isRecording.value">
-                <button class="btn primary" :disabled="analysing" @click="startRecording">
-                  {{ session.takes.length ? "Record another take" : "Record" }}
-                </button>
-                <span v-if="analysing" class="flag-count mono">Analysing the take…</span>
-              </template>
-              <template v-else>
-                <button class="btn" title="F" @click="recorder.flag('mark')">Flag ▹ (F)</button>
-                <button class="btn" title="R" @click="recorder.flag('retake')">
-                  Bad take ✕ (R)
-                </button>
-                <button class="btn primary" @click="stopRecording">Stop</button>
-                <span class="flag-count mono">{{ recorder.flags.value.length }} flags</span>
-              </template>
-            </div>
+            <div v-show="captureMode === 'record'" class="panel" role="tabpanel">
+              <div class="mic-row">
+                <select
+                  class="field-input mic-select"
+                  :value="recorder.deviceId.value"
+                  :disabled="recorder.isRecording.value"
+                  @change="recorder.selectDevice(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">Default microphone</option>
+                  <option v-for="d in recorder.devices.value" :key="d.deviceId" :value="d.deviceId">
+                    {{ d.label || "Microphone" }}
+                  </option>
+                </select>
+              </div>
 
-            <p v-if="recorder.error.value" class="error">{{ recorder.error.value }}</p>
-            <p v-else-if="takeWarning" class="error">{{ takeWarning }}</p>
+              <div class="levels" role="img" aria-label="Microphone level">
+                <span
+                  v-for="(lvl, i) in recorder.levels.value"
+                  :key="i"
+                  class="bar"
+                  :style="{ height: `${6 + lvl * 94}%` }"
+                />
+              </div>
+
+              <div class="transport">
+                <span class="elapsed mono">{{
+                  formatDuration(recorder.elapsedSec.value) ?? "0:00"
+                }}</span>
+                <template v-if="!recorder.isRecording.value">
+                  <button
+                    class="btn primary"
+                    :disabled="analysing || importing"
+                    @click="startRecording"
+                  >
+                    {{ session.takes.length ? "Record another take" : "Record" }}
+                  </button>
+                  <span v-if="analysing" class="flag-count mono">Analysing the take…</span>
+                </template>
+                <template v-else>
+                  <button class="btn" title="F" @click="recorder.flag('mark')">Flag ▹ (F)</button>
+                  <button class="btn" title="R" @click="recorder.flag('retake')">
+                    Bad take ✕ (R)
+                  </button>
+                  <button class="btn primary" @click="stopRecording">Stop</button>
+                  <span class="flag-count mono">{{ recorder.flags.value.length }} flags</span>
+                </template>
+              </div>
+
+              <p v-if="recorder.error.value" class="error">{{ recorder.error.value }}</p>
+              <p v-else-if="takeWarning" class="error">{{ takeWarning }}</p>
+            </div>
           </div>
 
           <!-- Programme overview: chapters and music slots on one clean bar, click to add a
@@ -796,11 +914,60 @@ const copyLink = async () => {
   font-family: var(--hw-serif);
   color: var(--hw-ink);
 }
-.recorder {
+/* Record and Upload are two doors into the same box, so the box is what carries the border
+   and the tabs sit on its lip — a second bordered card per tab would read as two studios. */
+.capture {
   border: 1px solid var(--hw-rule);
   border-radius: 6px;
-  padding: 1.25rem;
   margin: 0 0 2rem;
+}
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid var(--hw-rule);
+}
+.tab {
+  padding: 0.6rem 0.9rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  font-family: var(--hw-mono);
+  font-size: 0.85rem;
+  color: var(--hw-ink-faint);
+}
+.tab:hover:not(:disabled) {
+  color: var(--hw-pink-deep);
+}
+.tab.on {
+  color: var(--hw-pink-deep);
+  border-bottom-color: var(--hw-pink);
+}
+.tab:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.tab:focus-visible {
+  outline: 2px solid var(--hw-pink);
+  outline-offset: -2px;
+  border-radius: 3px;
+}
+.panel {
+  padding: 1.25rem;
+}
+.upload-field {
+  margin-bottom: 0.75rem;
+}
+/* The picker's own button is the browser's; only the box around it is ours. */
+.file-input {
+  font-family: var(--hw-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.panel .hint {
+  margin-top: 0;
 }
 .mic-row {
   margin-bottom: 1rem;

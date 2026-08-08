@@ -46,6 +46,25 @@ export const createTakeWriter = async (takeId: string, extension: string): Promi
   }
 }
 
+/**
+ * Store an already-finished audio file as a take, whole. The recording path streams chunks
+ * through `createTakeWriter`; an imported file is already on disk and only needs a copy into
+ * OPFS, so the two never share a code path beyond the directory they land in.
+ */
+export const writeTakeFile = async (
+  takeId: string,
+  file: File,
+  extension: string,
+): Promise<string> => {
+  const dir = await takesDir()
+  const name = `${takeId}.${extension}`
+  const handle = await dir.getFileHandle(name, { create: true })
+  const writable = await handle.createWritable()
+  await writable.write(file)
+  await writable.close()
+  return `${TAKES_DIR}/${name}`
+}
+
 /** Read a stored take back as a File, ready for mediabunny's BlobSource. */
 export const readTakeFile = async (path: string): Promise<File | null> => {
   try {
