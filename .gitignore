@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 
 .superpowers/
+
+# Browser-mode tests drop a PNG next to the spec when one fails; it is a debugging aid
+# for that run, not a reference image, and the next run overwrites it.
+__screenshots__/
+.vitest-attachments/

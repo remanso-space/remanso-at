@@ -161,7 +161,20 @@ pnpm dev           # :5173
 pnpm build         # vue-tsc -b && vite build; must be clean, no warnings
 pnpm lint          # oxlint  (pnpm lint:fix to autofix)
 pnpm fmt           # oxfmt   (pnpm fmt:check to verify only)
+pnpm test          # vitest, jsdom, *.spec.ts
+pnpm test:browser  # vitest in chromium, *.browser.spec.ts
 ```
+
+Two test suites, two configs. `vitest.config.ts` runs everything in jsdom; `vitest.browser.config.ts`
+runs `*.browser.spec.ts` in a real headless chromium at a 390×844 phone viewport, because layout,
+resolved custom properties and `@media`/`@container` rules have no meaning in jsdom. That is what
+the mobile specs assert: nothing paints past the viewport, and every control clears the 44 px
+tap target (24 px where a full-size equivalent exists elsewhere, per WCAG 2.2's exception).
+
+`pnpm browser:install` fetches chromium. On a machine without root and without chromium's shared
+libraries — the dev container — it vendors them under `~/.local/share/chromium-deps`, which
+`vitest.browser.config.ts` then points `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` at. Skip it where
+a browser already runs.
 
 `pnpm build` warns `@import must precede all rules` when the font `@import url(...)` in
 `src/style.css` sits below `@import "tailwindcss"`. The build then drops the font import and text

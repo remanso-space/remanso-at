@@ -70,9 +70,11 @@ const gridPct = ["33.33%", "66.66%"]
 const track = ref<HTMLElement | null>(null)
 
 const pct = (sec: number): string => (total.value > 0 ? `${(sec / total.value) * 100}%` : "0%")
-// Blocks never shrink below a thumb-width, so a 4 s break on a 40 min cut stays clickable.
+// A block holds a drag handle and a remove button, so it never shrinks below the 24 px
+// WCAG 2.2 calls the minimum target: at 0.5rem a 4 s break on a 40 min cut was 8 px wide
+// and its × was clipped out of the block entirely. Above that the width is honest.
 const blockWidth = (lengthSec: number): string =>
-  total.value > 0 ? `max(0.5rem, ${(lengthSec / total.value) * 100}%)` : "0.5rem"
+  total.value > 0 ? `max(1.5rem, ${(lengthSec / total.value) * 100}%)` : "1.5rem"
 
 const rectSecAt = (clientX: number): number => {
   const rect = track.value?.getBoundingClientRect()
@@ -293,7 +295,11 @@ const onRemove = (slotId: string) => emit("edit", removeSlot(props.session, slot
   align-items: center;
   justify-content: space-between;
   gap: 0.2rem;
-  padding: 0 0.25rem;
+  /* No padding on the block itself: at its 24 px minimum the whole block is the × and
+     any inset would push the button past the clipping edge. The label carries its own. */
+  padding: 0;
+  /* So the label can be dropped when the block is too narrow to hold both it and the ×. */
+  container-type: inline-size;
   border-radius: 3px;
   box-sizing: border-box;
   color: var(--hw-surface);
@@ -311,20 +317,48 @@ const onRemove = (slotId: string) => emit("edit", removeSlot(props.session, slot
 .slot.outro {
   background: var(--hw-leaf);
 }
+/* The block clips what does not fit, and the label is what gives way: at 24 px wide a
+   nowrap "BREAK" took the whole block and pushed the × out of sight, leaving a slot that
+   could not be removed from the bar at all. Now the × keeps its corner and the label
+   takes what is left — or nothing, on a block only wide enough for the button. */
 .tag {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  /* Room for the × that sits pinned to the block's right edge. */
+  padding: 0 24px 0 0.25rem;
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   white-space: nowrap;
   pointer-events: none;
 }
+/* Under ~4 characters of room the label is unreadable anyway, and it paints over the ×
+   because padding does not shrink. Below that width the block is just the button. */
+@container (max-width: 56px) {
+  .tag {
+    display: none;
+  }
+}
+/* The glyph is 14 px, the target is not: it stretches to the block's full height and to
+   24 px across, which is the WCAG 2.2 AA minimum. A block on a 44 px bar cannot also be
+   44 px tall — the comfortable target for removing a slot is the "Remove" button in the
+   music panel, which is what makes the smaller one here allowed rather than a shortfall. */
 .x {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
   border: none;
   background: transparent;
   color: inherit;
   font-size: 0.9rem;
   line-height: 1;
-  padding: 0 0.1rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   opacity: 0.75;
 }

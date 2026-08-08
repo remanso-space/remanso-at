@@ -546,15 +546,19 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
   padding: 0;
   margin: 0.5rem 0 0;
 }
+/* A result is four controls around a title of unknown length. On a phone they do not fit
+   on one line, and a nowrap row pushes "Use" past the right edge where no thumb can reach
+   it — so the row wraps, with the title taking the first line to itself when it has to. */
 .result {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.25rem 0;
 }
 .result .track {
-  flex: 1;
-  min-width: 8rem;
+  flex: 1 1 8rem;
+  min-width: 0;
 }
 .empty {
   font-size: 0.8rem;
@@ -565,5 +569,45 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
   color: #c0392b;
   font-size: 0.85rem;
   margin: 0.5rem 0 0;
+}
+
+/* On a phone every control here is hit with a thumb, and the desktop sizes land between
+   28 and 40 px — under the 44 px both Apple's HIG and WCAG 2.2 call a reliable target.
+   Text stays the size it was; only the box grows, so nothing about the layout changes
+   except that the controls can be pressed. Same breakpoint as StudioView's page padding. */
+@media (max-width: 640px) {
+  .slots {
+    padding: 1rem;
+  }
+  /* Side by side, the label loses the race for room and breaks as "§ —" / "MUSIC". */
+  .head {
+    display: block;
+  }
+  .head .tier {
+    margin-top: 0.15rem;
+  }
+  .btn,
+  .chip,
+  .picker,
+  .num,
+  .text,
+  .search-btn {
+    min-height: 44px;
+  }
+  .btn,
+  .chip,
+  .search-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn.tiny {
+    padding: 0.2rem 0.6rem;
+  }
+  /* The number inputs sit inside a label that also holds the word "length"/"gain"; the
+     44 px belongs to the input, not to the text next to it. */
+  .lbl {
+    align-items: center;
+  }
 }
 </style>

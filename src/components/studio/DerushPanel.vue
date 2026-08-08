@@ -677,4 +677,42 @@ const lufsLabel = (takeId: string): string => {
   font-size: 0.72rem;
   color: var(--hw-ink-faint);
 }
+
+/* Derush on a phone. The keyboard shortcuts this panel is built around do not exist
+   there, so every one of these controls is pressed with a thumb — and the desktop sizes
+   land at 40 px, the checkbox at 13. Only the boxes grow; the type stays as it is, and
+   the layout is unchanged above 640 px. Same breakpoint as StudioView's page padding. */
+@media (max-width: 640px) {
+  .derush {
+    padding: 1rem;
+  }
+  /* min-width as well as height: the region nudges are a single "[" or "]" glyph and
+     came out 30 px across, narrow enough to hit the one next to it instead. */
+  .btn,
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .btn.tiny {
+    padding: 0.2rem 0.6rem;
+  }
+  /* A native checkbox does not take a height; the label around it is the target, and the
+     box itself is scaled to something a thumb can aim at. */
+  .check {
+    min-height: 44px;
+  }
+  .check input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+  }
+  /* The take rows and chapter rows are pressable across their whole width already; they
+     just need the height. */
+  .take-pick,
+  .chapter {
+    min-height: 44px;
+  }
+}
 </style>

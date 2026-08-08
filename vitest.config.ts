@@ -2,9 +2,9 @@ import { fileURLToPath, URL } from "node:url"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vitest/config"
 
-import pkg from "./package.json"
+import pkg from "./package.json" with { type: "json" }
 
-// Vitest config lives on its own, apart from vite.config.ts, on purpose: vitest 3
+// Vitest config lives on its own, apart from vite.config.ts, on purpose: vitest
 // bundles vite 7's types while this app runs vite 8 (rolldown), so a `test` block on
 // vite 8's config type-errors under vue-tsc. This file is excluded from every tsconfig
 // (vue-tsc never typechecks it) and vitest transpiles it with esbuild at runtime, so the
@@ -25,5 +25,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     globals: false,
+    // *.browser.spec.ts belongs to vitest.browser.config.ts: it imports `vitest/browser`,
+    // which has nothing to talk to in node, so collecting it here only ever fails.
+    exclude: ["**/node_modules/**", "**/dist/**", "**/*.browser.spec.ts"],
   },
 })
