@@ -7,12 +7,11 @@ import { playwright } from "@vitest/browser-playwright"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vitest/config"
 
-// Browser-mode tests: the ones jsdom cannot answer. Layout at a real viewport width,
-// resolved computed styles, scroll widths. Kept apart from vitest.config.ts because that
-// one runs jsdom over every *.spec.ts; these are *.browser.spec.ts and need a browser.
+// The tests jsdom cannot answer: layout at a real viewport width, resolved computed styles,
+// scroll widths. Kept apart from vitest.config.ts, which runs jsdom over every *.spec.ts.
 //
-// Like vitest.config.ts this file is outside every tsconfig, so vue-tsc never typechecks
-// it and the vite 7/8 type clash between vitest and the app never surfaces.
+// Like vitest.config.ts this file is outside every tsconfig, so vue-tsc never typechecks it
+// and the vite 7/8 type clash between vitest and the app never surfaces.
 
 // Where scripts/install-browser-deps.sh vendors chromium's shared libraries when the
 // machine has none and no root to apt-install them. Absent on CI and on a normal desktop,

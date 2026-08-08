@@ -21,7 +21,7 @@ const noteRecord = (uri: string, title: string, content: string) => ({
   value: { $type: "space.remanso.note", title, content },
 })
 
-/** listRecords over the recording collection — the second call listPublishedNotes makes. */
+/** The second call listPublishedNotes makes. */
 const recordingList = (...rkeys: string[]) =>
   okJson({
     records: rkeys.map((rkey) => ({ uri: `at://did:plc:abc/space.remanso.recording/${rkey}` })),

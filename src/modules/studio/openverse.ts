@@ -1,21 +1,14 @@
 import type { MusicCredit, MusicPick } from "./edl.types"
 import { writeCueFile } from "./opfsCues"
 
-// Openverse: openly licensed audio, searched straight from the browser (slice 7).
+// Anonymous Openverse callers get 20 requests/minute and 200/day per client IP.
 //
-// No API key and no proxy. Anonymous callers get 20 requests/minute and 200/day, counted per
-// client IP — so each author spends their own budget against their own address, and a key
-// would only move that budget onto one shared quota while putting a secret in a SPA bundle.
+// Jamendo is excluded from `SOURCES` rather than filtered out of the results: its storage host
+// pins `access-control-allow-origin` to an unrelated origin, and mixing needs the samples, not
+// a playable URL — so a Jamendo track cannot be rendered into an episode at all.
 //
-// Two of Openverse's three audio providers are usable and the third is not, for a reason
-// worth writing down: Jamendo is the actual music catalogue, and its storage host answers
-// with `access-control-allow-origin` pinned to an unrelated origin. Mixing needs the samples,
-// not a playable URL, so a Jamendo track cannot be rendered into an episode at all. It is
-// excluded in the query rather than filtered out of the results, so the pool the author
-// browses is the pool the studio can actually use.
-//
-// Licences are limited to CC0 and CC-BY. Share-alike is left out on purpose: a recording is a
-// derivative work, and CC-BY-SA would push its terms onto the whole episode.
+// Licences are limited to CC0 and CC-BY. A recording is a derivative work, so CC-BY-SA would
+// push its terms onto the whole episode.
 
 const API = "https://api.openverse.org/v1/audio/"
 
@@ -26,7 +19,6 @@ const PAGE_SIZE = 20
 /** Containers `decodeTakeToMono` can read back out of OPFS. */
 const DECODABLE = new Set(["mp3", "wav", "flac", "ogg", "oga", "opus", "m4a", "mp4", "webm"])
 
-/** Starting points for an author who does not know what to type. */
 export const PRESET_QUERIES = [
   "calm ambient pad",
   "warm drone",
@@ -93,9 +85,8 @@ const toResult = (row: ApiRow): MusicResult | null => {
 }
 
 /**
- * Search the pool. Rows the studio cannot use — no playable URL, a container it cannot
- * decode, a licence outside the pool — are dropped rather than shown and then failing at the
- * moment the author picks them.
+ * Rows the studio cannot use — no playable URL, an undecodable container, a licence outside
+ * the pool — are dropped here rather than failing at the moment the author picks them.
  */
 export const searchMusic = async (
   query: string,
@@ -134,9 +125,8 @@ export const searchMusic = async (
 }
 
 /**
- * Download a picked track into OPFS and hand back what a slot needs. The bytes are copied
- * once, at pick time — after this the render never touches the network, which is what keeps
- * publishing an episode an offline operation.
+ * The bytes are copied once, at pick time, so the render never touches the network and
+ * publishing stays an offline operation.
  */
 export const fetchToOpfs = async (
   result: MusicResult,

@@ -5,8 +5,6 @@ import { duckEnvelope } from "./duck"
 
 const SR = 8000
 
-// A voice that talks, falls silent for a stretch, then talks again — the shape ducking has
-// to follow.
 const speechThenSilence = (): Float32Array => {
   const talk = (sec: number, amp: number) =>
     Float32Array.from({ length: Math.round(sec * SR) }, (_, i) =>

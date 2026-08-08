@@ -1,11 +1,5 @@
-// The peaks pass: the take's amplitude reduced to one byte per bin, so the review
-// waveform draws from a few kilobytes instead of decoding an hour of audio every time a
-// component mounts (plan: derush, "waveform + markers"). Computed once when a take is
-// analysed and parked in OPFS next to the take (`take.peaksPath`).
-//
-// One byte per bin is deliberate: a waveform is 100 px tall at best, so 8 bits of
-// amplitude is already more resolution than the screen has, and 100 bins/second keeps a
-// forty-minute take under a quarter of a megabyte.
+// One byte per bin: a waveform is 100 px tall at best, so 8 bits of amplitude already exceeds
+// the screen's resolution, and 100 bins/second keeps a forty-minute take under 0.25 MB.
 
 export const PEAKS_BINS_PER_SEC = 100
 
@@ -76,11 +70,9 @@ export const peakAtSec = ({ binsPerSec, bins }: Peaks, sec: number): number => {
 }
 
 /**
- * The loudest peak in each of `columns` equal slices of [0, durationSec] — one value per
- * pixel column of the waveform. Reducing by max (not by mean) keeps a single loud
- * transient visible when a forty-minute take is squeezed into 700 pixels; when there are
- * fewer bins than columns the nearest bin is repeated, so a short take draws a stepped
- * waveform rather than a comb of gaps.
+ * Reducing by max rather than mean keeps a single loud transient visible when a forty-minute
+ * take is squeezed into 700 pixels. With fewer bins than columns the nearest bin repeats, so
+ * a short take draws a stepped waveform rather than a comb of gaps.
  */
 export const peaksForColumns = (peaks: Peaks, durationSec: number, columns: number): number[] => {
   const out = Array.from<number>({ length: Math.max(0, columns) }).fill(0)

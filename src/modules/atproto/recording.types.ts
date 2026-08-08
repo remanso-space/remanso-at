@@ -1,7 +1,6 @@
 import type { PublicNoteBlob } from "./publicNote.types"
 
-// Hand-written from lexicons/space/remanso/recording.json — the record the studio
-// will publish (slice 4) and /listen will browse (slice 7).
+// Hand-written from lexicons/space/remanso/recording.json.
 export const RECORDING_COLLECTION = "space.remanso.recording"
 
 // Mirrors the lexicon's maxSize. The PDS enforces its own ceiling too

@@ -16,11 +16,9 @@ const { offlineReady, needRefresh, updateServiceWorker } = useRegisterSW({
 // An update dialog mid-recording is hostile — hold the toast until the take is done.
 const { isRecording } = useRecordingState()
 
-// Left to itself this toast is unreachable: `offlineReady` fires once, on the first install
-// a browser ever does, and `needRefresh` only when a new build lands while the tab is open.
-// There is no way to ask for it, which makes it impossible to review or to demo. `?toast=`
-// renders either state on any route, without waiting on a service worker event. A preview
-// is deliberate, so it ignores the mid-recording hold.
+// `offlineReady` fires once, on a browser's first install, and `needRefresh` only when a new
+// build lands while the tab is open — so `?toast=` renders either state on any route without
+// waiting on a service worker event. A preview is deliberate and ignores the recording hold.
 const preview = ref(new URLSearchParams(location.search).get("toast") ?? "")
 
 const showOfflineReady = computed(() => preview.value === "offline-ready" || offlineReady.value)

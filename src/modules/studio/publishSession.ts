@@ -7,18 +7,11 @@ import { contentTier, encodeOpus } from "./mediaCodec"
 import { creditsToPublish, programmeDurationSec } from "./musicSlots"
 import { renderToPcm, type RenderProgress } from "./renderToPcm"
 
-// The end of the line: render whatever the EDL currently says, encode it to Opus, and
-// write it to the PDS. With a `noteRkey` the deliverable is the record itself, put at the
-// note's own rkey — the note gains its audio without a single byte of the note changing,
-// so there is nothing to paste and `link` comes back null. Without one there is no note to
-// attach to, and the deliverable falls back to the copyable markdown link the author pastes
-// into a `.pub.md`. Never writes a note either way — the note goes through git via the
-// existing Action.
-//
-// Slice 5 moved the editing decisions *out* of here. Pause removal used to be a boolean
-// on this call; it is now clip edits the review pass has already made, so publish has no
-// opinion about the audio at all beyond the chain. That is the whole point of the pause
-// detector emitting edits rather than processed samples.
+// With a `noteRkey` the recording is put at the note's own rkey, so the note gains its audio
+// without any byte of the note changing and `link` comes back null. Without one there is
+// nothing to attach to, and the deliverable is the markdown link the author pastes into a
+// `.pub.md`. Never writes a note either way — the note goes through git via the existing
+// Action.
 //
 // Browser-coupled (decode/encode/upload/OPFS); the pieces it composes are each unit-tested.
 
@@ -32,14 +25,13 @@ export interface PublishParams {
   musicPcm?: CuePcm
   /** The rkey of the note being recorded against; the recording is written there. */
   noteRkey?: string
-  /** Coarse progress across decode, render, encode and upload — for the studio's bar. */
   onProgress?: (progress: RenderProgress) => void
 }
 
 /**
- * The credit lines that ride under the markdown link. CC-BY asks for the title, the author
- * and the licence, and the note is where a reader can actually see them — a WebM blob has
- * nowhere to carry attribution, and the record's `credits` field is for machines.
+ * CC-BY asks for the title, author and licence, and the note is the only place a reader can
+ * see them: a WebM blob cannot carry attribution and the record's `credits` field is for
+ * machines.
  */
 const withCredits = (link: string, credits: MusicCredit[]): string => {
   if (credits.length === 0) return link
@@ -73,8 +65,8 @@ export const publishSession = async ({
     return { ok: false, error: "There is nothing to publish — every region is rejected or muted." }
   }
 
-  // Decode-and-render owns the first three quarters of the bar; encode and upload split the
-  // rest. Scale the shared step's fraction into that window so the bar never jumps back.
+  // Decode-and-render owns the first three quarters of the bar, so scale the shared step's
+  // fraction into that window and the bar never jumps back.
   const prepared = await renderToPcm({
     session,
     takePcm,

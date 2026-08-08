@@ -5,8 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { ActorSuggestion } from "../modules/atproto/searchActors"
 
-// The view's data sources are all network. Mocked at the module edge so the test is about
-// the search box: what it asks for, what it shows, and where picking a row navigates.
 const searchActors = vi.fn<(query: string) => Promise<ActorSuggestion[]>>()
 
 vi.mock("../modules/atproto/searchActors", () => ({
@@ -73,7 +71,6 @@ const mountListen = async () => {
   return wrapper
 }
 
-/** Type into the box and let the debounce fire. */
 const type = async (text: string) => {
   const input = wrapper!.find(".search-input")
   await input.setValue(text)

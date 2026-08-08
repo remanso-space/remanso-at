@@ -1,16 +1,11 @@
 import type { Take } from "./edl.types"
 import { writeTakeFile } from "./opfsTakes"
 
-// Audio recorded elsewhere — a phone voice memo (.m4a), a field recorder's .wav, a call
-// exported to .mp3 — enters the studio here and is a take like any other from that point on:
-// same OPFS directory, same analysis, same EDL, same render. The import does not transcode.
-// The take is an intermediate the render re-encodes to Opus anyway, so a second encode on the
-// way in would only lose quality and time.
+// An imported file is a take like any other from here on. The import does not transcode: the
+// take is an intermediate the render re-encodes to Opus anyway.
 //
-// What can be read is exactly what mediaCodec.ts loads mediabunny with: MP4/QTFF, Matroska/
-// WebM, MP3, WAVE, OGG, ADTS and FLAC. m4a is the best-supported of them — it is the same
-// container this app's own recorder writes on Chrome and Safari — so a phone voice memo needs
-// no conversion.
+// What can be read is exactly what mediaCodec.ts loads mediabunny with — MP4/QTFF,
+// Matroska/WebM, MP3, WAVE, OGG, ADTS and FLAC.
 
 /** Extensions of the containers mediabunny is loaded with, lowercase, no dot. */
 const KNOWN_EXTENSIONS = new Set([
@@ -62,7 +57,6 @@ const EXTENSION_BY_TYPE: Record<string, string> = {
 export const IMPORT_ACCEPT =
   "audio/*,.m4a,.m4b,.mp4,.mov,.mkv,.webm,.weba,.mp3,.wav,.ogg,.oga,.opus,.aac,.flac"
 
-/** The extension the stored copy gets, or null if this is not a container we can read. */
 export const takeExtensionFor = (file: File): string | null => {
   const dot = file.name.lastIndexOf(".")
   const named = dot > 0 ? file.name.slice(dot + 1).toLowerCase() : ""
@@ -73,9 +67,8 @@ export const takeExtensionFor = (file: File): string | null => {
 export type ImportResult = { ok: true; take: Take } | { ok: false; error: string }
 
 /**
- * Copy a picked file into OPFS as a take. `durationSec` is left at 0 on purpose: the caller
- * decodes the take next and the sample count is the only duration the EDL may index against
- * (see analyzeTakeFile). An import whose decode fails is not a take, and the caller drops it.
+ * `durationSec` is left at 0 on purpose: the caller decodes next, and the sample count is the
+ * only duration the EDL may index against (see analyzeTakeFile).
  */
 export const importTake = async (file: File, id: string): Promise<ImportResult> => {
   const extension = takeExtensionFor(file)

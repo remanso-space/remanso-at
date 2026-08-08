@@ -3,11 +3,8 @@ import { toRaw } from "vue"
 import { renderSession, type CuePcm, type SessionRender, type TakePcm } from "./assemble"
 import type { Session } from "./edl.types"
 
-// The client half of the off-main-thread render. `renderSession` stays the pure, tested
-// core; this wrapper runs it in a Worker when the platform has module workers, and falls
-// straight back to a synchronous call when it does not (jsdom under test, or any browser
-// without `type: "module"` workers). Same result either way — the Worker is a latency win,
-// never a behaviour change.
+// Runs `renderSession` in a Worker where module workers exist, and falls straight back to a
+// synchronous call where they do not (jsdom under test). Same result either way.
 
 export interface RenderRequest {
   session: Session
@@ -21,10 +18,9 @@ export type RenderResponse = { ok: true; rendered: SessionRender } | { ok: false
 const canUseModuleWorker = (): boolean => typeof Worker !== "undefined"
 
 /**
- * Render off the main thread. The PCM maps are copied into the Worker (the main thread keeps
- * owning them for playback), and the finished samples are transferred back. On any Worker
- * failure — spawn, message or a thrown render — we fall back to the synchronous path so a
- * publish never dies on a Worker quirk.
+ * The PCM maps are copied into the Worker, since the main thread keeps owning them for
+ * playback; the finished samples are transferred back. Any Worker failure — spawn, message
+ * or a thrown render — falls back to the synchronous path.
  */
 export const renderSessionInWorker = (
   session: Session,

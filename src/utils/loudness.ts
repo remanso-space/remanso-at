@@ -1,21 +1,18 @@
 /**
  * Loudness estimation, ITU-R BS.1770 K-weighting.
  *
- * This is an estimate, not a conformant measurement. A conformant integrated
- * loudness needs every sample of the programme; we measure from an AnalyserNode
- * polled on a timer, which samples the signal rather than covering it. For a
- * single speaker on one microphone that lands within a decibel or two — enough
- * to stop one take being 18 dB quieter than the next, which is the actual
- * problem. It is not enough to certify a master against a broadcast spec.
+ * An estimate, not a conformant measurement: a conformant integrated loudness needs every
+ * sample, while this measures from an AnalyserNode polled on a timer. Within a decibel or two
+ * for a single speaker on one microphone — enough to keep takes level, not enough to certify
+ * a master against a broadcast spec.
  */
 
 /** Apple Podcasts' integrated target. Spotify normalises to -14 on its own. */
 export const TARGET_LUFS = -16
 
 /**
- * Windows quieter than this are room tone, not speech, and would drag the mean
- * down. BS.1770 calls this the absolute gate; the spec puts it at -70 LUFS, but
- * a browser capture has a higher noise floor than a studio feed.
+ * BS.1770's absolute gate. The spec puts it at -70 LUFS, but a browser capture has a higher
+ * noise floor than a studio feed.
  */
 export const SILENCE_GATE_LUFS = -60
 
@@ -32,9 +29,9 @@ interface Biquad {
 }
 
 /**
- * The two K-weighting stages: a high shelf standing in for the head's acoustic
- * response, then a high-pass. Coefficients are derived for the actual sample
- * rate rather than hardcoded for 48 kHz, since a browser may hand us 44.1.
+ * The two K-weighting stages: a high shelf standing in for the head's acoustic response, then
+ * a high-pass. Coefficients are derived for the actual sample rate rather than hardcoded for
+ * 48 kHz, since a browser may hand back 44.1.
  */
 const kWeighting = (sampleRate: number): [Biquad, Biquad] => {
   const shelfF0 = 1681.974450955533
@@ -96,9 +93,8 @@ const step = (filter: Biquad, state: BiquadState, x: number): number => {
 
 export interface LoudnessEstimator {
   /**
-   * Feed one window of time-domain samples per channel, -1 to 1. Channels are
-   * summed the way BS.1770 does it, at unity weight — which is right for left,
-   * right and centre, and this is not going to meet a surround feed.
+   * One window of time-domain samples per channel, -1 to 1. Channels are summed at unity
+   * weight the way BS.1770 does it, which is right for left, right and centre.
    */
   push: (...channels: Float32Array[]) => void
   /** Windows loud enough to count as speech. */
@@ -109,10 +105,9 @@ export interface LoudnessEstimator {
 
 export const createLoudnessEstimator = (sampleRate: number): LoudnessEstimator => {
   const [shelf, highpass] = kWeighting(sampleRate)
-  // Filter state persists across windows, and each channel needs its own. The
-  // windows may not be contiguous, in which case each carries a small
-  // discontinuity — negligible against a window of thousands of samples, and
-  // cheaper than warming the filter up every time.
+  // Filter state persists across windows, one set per channel. Non-contiguous windows each
+  // carry a small discontinuity, negligible against thousands of samples and cheaper than
+  // warming the filter up every time.
   const shelfStates: BiquadState[] = []
   const highpassStates: BiquadState[] = []
 
@@ -159,10 +154,9 @@ export const createLoudnessEstimator = (sampleRate: number): LoudnessEstimator =
     lufs() {
       if (!kept.length) return null
 
-      // BS.1770's relative gate. Without it the filters' ringing decaying into
-      // the silence after a phrase counts as programme material and drags the
-      // measurement down — measurably, by a couple of tenths on a take with
-      // long pauses.
+      // BS.1770's relative gate. Without it the filters' ringing decaying into the silence
+      // after a phrase counts as programme material, dragging the measurement down by a
+      // couple of tenths on a take with long pauses.
       const threshold = meanLoudness(kept) - 10
       const gated = kept.filter((square) => loudnessOf(square) >= threshold)
 
@@ -174,12 +168,9 @@ export const createLoudnessEstimator = (sampleRate: number): LoudnessEstimator =
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
 
 /**
- * The correction to fold into the capture gain after a take.
- *
- * `appliedDb` is the gain that take was already recorded with, so the result is
- * a cumulative offset rather than a fresh guess: measuring -20 LUFS on a take
- * that already had +6 dB means the microphone itself sits at -26, and the
- * offset converges in one step instead of oscillating.
+ * `appliedDb` is the gain the take was already recorded with, so the result is a cumulative
+ * offset rather than a fresh guess: -20 LUFS measured on a take that already had +6 dB means
+ * the microphone sits at -26. Converges in one step instead of oscillating.
  */
 export const nextGainDb = (measuredLufs: number, appliedDb: number, target = TARGET_LUFS): number =>
   clamp(appliedDb + (target - measuredLufs), MIN_GAIN_DB, MAX_GAIN_DB)

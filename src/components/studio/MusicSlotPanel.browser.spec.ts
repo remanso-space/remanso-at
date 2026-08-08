@@ -9,11 +9,6 @@ import { addSlot, newSlot } from "../../modules/studio/musicSlots"
 import { asPhoneColumn, overflowing, undersizedTargets } from "../../test/mobileLayout"
 import MusicSlotPanel from "./MusicSlotPanel.vue"
 
-// The panel's unit spec covers the wiring; this one covers what only a browser knows —
-// whether the thing fits on a phone. The two paths an author actually walks are a break
-// slot (the row with the most controls in it) and the music finder with real search
-// results in it, so those are what gets measured.
-
 const searchMusic = vi.fn()
 const fetchToOpfs = vi.fn()
 
@@ -77,7 +72,6 @@ const cicadaResults = [
 
 const session = (): Session => addTake(newSession("s", "Episode"), take, "c1")
 
-/** The panel as a page sees it: a full-width column, nothing else competing for room. */
 const mountPanel = (s: Session) => {
   asPhoneColumn()
   return render(MusicSlotPanel, {

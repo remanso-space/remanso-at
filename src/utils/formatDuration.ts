@@ -1,7 +1,6 @@
 /**
- * Seconds as `m:ss`, or `h:mm:ss` once it runs past an hour. Returns null for a
- * missing or nonsensical length so a caller can drop the element entirely
- * rather than render "0:00".
+ * `m:ss`, or `h:mm:ss` past an hour. Null for a missing or nonsensical length, so a caller
+ * can drop the element entirely rather than render "0:00".
  */
 export const formatDuration = (totalSec?: number | null): string | null => {
   if (!totalSec || totalSec < 0 || !Number.isFinite(totalSec)) return null

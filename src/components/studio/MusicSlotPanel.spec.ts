@@ -7,10 +7,6 @@ import type { MusicPick, Session, Take } from "../../modules/studio/edl.types"
 import { addSlot, fillSlot, newSlot } from "../../modules/studio/musicSlots"
 import MusicSlotPanel from "./MusicSlotPanel.vue"
 
-// The pure specs cover the slot ops and the Openverse client; this covers the wiring — a
-// control reaches the right op, a picked result becomes a filled slot, and the resulting
-// session leaves as an `edit`.
-
 const searchMusic = vi.fn()
 const fetchToOpfs = vi.fn()
 

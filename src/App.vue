@@ -4,17 +4,11 @@ import { AtprotoLogin } from "vue-atproto-login"
 
 import NewVersion from "./components/NewVersion.vue"
 
-// Sign-in is `vue-atproto-login`'s component: the OAuth client, the callback, the identity
-// cache and the handle typeahead all live there. It is configured once in main.ts; nothing
-// here talks to @atproto/oauth-client-browser directly any more.
-
-// Injected at build time from package.json — the version is written in exactly one place.
 const version = __APP_VERSION__
 </script>
 
 <template>
   <div class="ode">
-    <!-- ── Nav ─────────────────────────────────────────────── -->
     <nav class="nav">
       <RouterLink to="/" class="brand">
         <img src="/mark.png" alt="" class="brand-mark" width="28" height="28" />
@@ -32,7 +26,6 @@ const version = __APP_VERSION__
       <RouterView />
     </main>
 
-    <!-- ── Footer ────────────────────────────────────────── -->
     <footer class="footer">
       <div class="footer-inner">
         <div class="footer-brand">
@@ -68,11 +61,10 @@ const version = __APP_VERSION__
   position: relative;
 }
 
-/* Two faint radial washes, lifted from remanso.space's editorial page. Behind everything
-   at z-index -1 rather than above the page at 0: at 0 the wash paints over ordinary content
-   and every section has to bid above it, which sets a floor any overlay then has to clear
-   too — that is how the update toast ended up buried. Safe because html carries the paper
-   background and body sets none, so the canvas still paints behind this. */
+/* Behind everything at z-index -1, not above the page at 0: at 0 the wash paints over
+   ordinary content, every section has to bid above it, and that sets a floor any overlay then
+   has to clear — which is how the update toast once ended up buried. Safe because html
+   carries the paper background and body sets none. */
 .ode::before {
   content: "";
   position: fixed;
@@ -93,7 +85,6 @@ main {
   font-family: var(--hw-mono);
 }
 
-/* ── Nav ─────────────────────────────────────────────────── */
 .nav {
   position: relative;
   display: flex;
@@ -143,7 +134,6 @@ main {
   color: var(--hw-ink);
 }
 
-/* ── Footer ──────────────────────────────────────────────── */
 .footer {
   position: relative;
   border-top: 1px solid var(--hw-rule);
@@ -209,7 +199,6 @@ main {
   margin-left: auto;
 }
 
-/* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 640px) {
   .nav {
     padding: 1rem 1.25rem;

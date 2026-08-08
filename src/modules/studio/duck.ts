@@ -1,13 +1,9 @@
-// Ducking music under speech. A cue clip marked `duck: "under-speech"`
-// is pulled down whenever the voice is talking and allowed back up in the gaps. The key
-// that drives it is the *offline* speech envelope — the same silence detection pauses.ts
-// already runs — not a realtime sidechain. Offline is strictly better here: the reduction
-// can be in place before the word starts (no attack overshoot on the first syllable), the
-// result is deterministic, and the analysis has already been paid for.
+// The key is the *offline* speech envelope from pauses.ts, not a realtime sidechain, so the
+// reduction is in place before the word starts — no attack overshoot on the first syllable —
+// and the result is deterministic.
 //
-// The output is a per-sample gain multiplier over the whole timeline. A cue clip multiplies
-// its own samples by the slice of this envelope under it, so two cues ducking against the
-// same voice duck identically.
+// One per-sample gain multiplier over the whole timeline: two cues ducking against the same
+// voice duck identically.
 
 import { dbToAmplitude } from "../../utils/loudness"
 import { detectSilences, type PauseOptions } from "./pauses"
@@ -17,7 +13,6 @@ export interface DuckOptions {
   attackSec: number
   /** How slowly it lets go after a line ends. Slow, so the music swells back naturally. */
   releaseSec: number
-  /** How far the cue is pulled down while speech is present. */
   depthDb: number
 }
 
@@ -28,11 +23,8 @@ export const DEFAULT_DUCK: DuckOptions = {
 }
 
 /**
- * A per-sample gain multiplier in (0, 1] over `speech`'s timeline: unity in the pauses,
- * `depthDb` of reduction under speech, ramped in at the attack rate and out at the release
- * rate. `speech` is the assembled speech timeline (already aligned to the cue timeline);
- * presence is the complement of `detectSilences`, so the duck opens exactly where a line
- * ends.
+ * A per-sample multiplier in (0, 1]: unity in the pauses, `depthDb` of reduction under speech.
+ * `speech` must be the assembled speech timeline, already aligned to the cue timeline.
  */
 export const duckEnvelope = (
   speech: Float32Array,
@@ -43,8 +35,8 @@ export const duckEnvelope = (
   const env = new Float32Array(speech.length)
   if (speech.length === 0) return env
 
-  // Presence: 1 where the voice is talking, 0 inside a detected silence. Built from the
-  // same detector the review pass uses, so the duck and the pause cuts never disagree.
+  // Presence: 1 where the voice is talking, 0 inside a detected silence. Built from the same
+  // detector the review pass uses, so the duck and the pause cuts never disagree.
   const silences = detectSilences(speech, sampleRate, options)
   const present = new Float32Array(speech.length).fill(1)
   for (const s of silences) {
@@ -57,8 +49,7 @@ export const duckEnvelope = (
   const releaseCoeff = Math.exp(-1 / (Math.max(1e-4, opt.releaseSec) * sampleRate))
   const floor = dbToAmplitude(opt.depthDb)
 
-  // `key` follows presence: rising toward 1 at the attack rate (duck engaging), falling
-  // toward 0 at the release rate (duck letting go). The gain is depthDb scaled by the key.
+  // `key` follows presence: rising toward 1 at the attack rate, falling toward 0 at release.
   let key = present[0]
   for (let i = 0; i < speech.length; i += 1) {
     const target = present[i]

@@ -3,13 +3,11 @@ import { decodeTakeToMono } from "./mediaCodec"
 import { computePeaks, PEAKS_BINS_PER_SEC, type Peaks } from "./peaks"
 import { detectSilences, planCuts, speechOnsets, type Cut, type Silence } from "./pauses"
 
-// One decode, every overlay. The review UI wants peaks, pause candidates, speech onsets
-// and a loudness figure for each take, and all four fall out of the same decoded mono
-// buffer — decoding once and keeping the samples also means publish does not decode the
-// same take a second time.
+// One decode, every overlay: peaks, pause candidates, onsets and loudness all fall out of
+// the same mono buffer, and keeping the samples means publish does not decode again.
 //
-// The measured LUFS here is the *raw* take, before the chain: it answers "was the mic
-// level sane", not "what will the episode be" (the render normalises to -16 regardless).
+// The measured LUFS is the *raw* take, before the chain — it answers "was the mic level
+// sane", not "what will the episode be". The render normalises to -16 regardless.
 
 /** The window BS.1770 gates on. 400 ms is the spec's momentary block. */
 const LOUDNESS_WINDOW_SEC = 0.4
@@ -23,7 +21,6 @@ export interface TakeAnalysis {
   lufs: number | null
 }
 
-/** Pure: everything the review UI overlays, from decoded mono samples. */
 export const analyzeDecoded = (
   samples: Float32Array,
   sampleRate: number,
@@ -52,9 +49,8 @@ export interface AnalyzedTake extends TakeAnalysis {
 }
 
 /**
- * Decode a stored take and analyse it. Duration comes from the sample count rather than
- * the container's header: the EDL indexes into these samples, so a clip window that
- * disagrees with the buffer by even a few frames would render silence at the seam.
+ * Duration comes from the sample count, not the container's header: the EDL indexes into
+ * these samples, and a clip window off by a few frames would render silence at the seam.
  */
 export const analyzeTakeFile = async (
   file: File,

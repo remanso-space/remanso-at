@@ -2,17 +2,15 @@ import { blobUrl, resolveActor } from "./resolveActor"
 import { RECORDING_COLLECTION, type Recording, type RecordingCredit } from "./recording.types"
 import type { ListenRecording } from "./listRecordings"
 
-// The everyone tier. `listRecordings` reads one repo straight off its PDS; this reads the
-// appview, the only place that has seen every author's recordings — a PDS knows only its
-// own. The appview row is flat and self-sufficient (title, duration, credits and all), so
-// there is no per-row getRecord: the only lookup is the author's PDS to build a getBlob URL,
-// resolved once per DID and reused. The note link is left off — the appview does not say
-// whether a note sits at the recording's rkey, and a link to a maybe-absent note is worse
-// than none.
+// The everyone tier reads the appview, the only place that has seen every author's
+// recordings; a PDS knows only its own. Rows are flat and self-sufficient, so the only lookup
+// is the author's PDS to build a getBlob URL.
+//
+// The note link is left off: the appview does not say whether a note sits at the recording's
+// rkey, and a link to a maybe-absent note is worse than none.
 
 export const APPVIEW_BASE = "https://api.remanso.space"
 
-/** One row of the appview's `/recordings` feed — flat, already indexed, blobs aside. */
 interface AppviewRecording {
   did: string
   rkey: string
@@ -38,8 +36,8 @@ const feedUrl = (cursor?: string): string => {
   return `${APPVIEW_BASE}/recordings?${query}`
 }
 
-// resolveActor memoises per DID (and collapses the concurrent burst a single page of
-// same-author rows would otherwise fire), so there is no separate PDS cache to keep here.
+// resolveActor already memoises per DID and collapses the concurrent burst, so there is no
+// separate PDS cache to keep here.
 const pdsFor = async (did: string): Promise<string | null> => (await resolveActor(did))?.pds ?? null
 
 const toListen = (row: AppviewRecording, pds: string): ListenRecording => {
@@ -66,10 +64,7 @@ const toListen = (row: AppviewRecording, pds: string): ListenRecording => {
   }
 }
 
-/**
- * One page of everyone's recordings, newest first, from the appview index. Rows whose DID
- * will not resolve to a PDS are dropped rather than shown with an unplayable blob.
- */
+/** Rows whose DID will not resolve to a PDS are dropped rather than shown unplayable. */
 export const listAllRecordings = async ({
   cursor,
 }: { cursor?: string } = {}): Promise<ListAllRecordingsResult> => {

@@ -119,8 +119,7 @@ describe("assembleSpeech", () => {
     const s = withSpeechClips(s0, [{ ...s0.tracks[0].clips[0], muted: true }])
     const out = assembleSpeech(s, { t1: ramp(3) }, SR)
 
-    // muted clip still sets timeline length via addTake's placement? No — timeline uses
-    // non-muted clips only, so the buffer is empty.
+    // The timeline length counts non-muted clips only, so the buffer is empty.
     expect(out.length).toBe(0)
   })
 

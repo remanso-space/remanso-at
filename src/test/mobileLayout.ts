@@ -1,5 +1,4 @@
-// Shared measurements for the *.browser.spec.ts files, which exist to answer the one
-// question jsdom cannot: does this fit on a phone, and can a thumb hit it.
+// Shared measurements for the *.browser.spec.ts files.
 
 /** An iPhone 14/15 in portrait — the narrow end the studio has to survive. */
 export const PHONE_WIDTH = 390

@@ -1,10 +1,7 @@
-// OPFS is where take bytes live. FileSystemWritableFileStream appends a MediaRecorder
-// chunk in constant time, so a 40-minute take streams to disk as it records instead of
-// growing a JS array in memory — the single biggest robustness win for recording on a
-// phone (plan: "Storage"). getFile() hands back a real File that goes straight into
-// mediabunny's BlobSource with no copy. One OPFS file per take.
+// One OPFS file per take. FileSystemWritableFileStream appends a MediaRecorder chunk in
+// constant time, so a 40-minute take streams to disk instead of growing a JS array in memory.
 //
-// All browser-coupled; verified in the app, not jsdom (OPFS is unavailable there).
+// OPFS is unavailable in jsdom, so nothing here is unit-tested — it is verified in the app.
 
 const TAKES_DIR = "takes"
 
@@ -22,10 +19,7 @@ export interface TakeWriter {
   abort: () => Promise<void>
 }
 
-/**
- * Open a streaming writer for a take. Chunks are appended as MediaRecorder emits them;
- * `close` seals the file, `abort` discards a take that was cancelled mid-record.
- */
+/** `close` seals the file; `abort` discards a take that was cancelled mid-record. */
 export const createTakeWriter = async (takeId: string, extension: string): Promise<TakeWriter> => {
   const dir = await takesDir()
   const name = `${takeId}.${extension}`
@@ -46,11 +40,7 @@ export const createTakeWriter = async (takeId: string, extension: string): Promi
   }
 }
 
-/**
- * Store an already-finished audio file as a take, whole. The recording path streams chunks
- * through `createTakeWriter`; an imported file is already on disk and only needs a copy into
- * OPFS, so the two never share a code path beyond the directory they land in.
- */
+/** For imported files, which are already on disk. Recording uses `createTakeWriter` instead. */
 export const writeTakeFile = async (
   takeId: string,
   file: File,
@@ -65,7 +55,6 @@ export const writeTakeFile = async (
   return `${TAKES_DIR}/${name}`
 }
 
-/** Read a stored take back as a File, ready for mediabunny's BlobSource. */
 export const readTakeFile = async (path: string): Promise<File | null> => {
   try {
     const dir = await takesDir()
@@ -81,7 +70,7 @@ export const deleteTake = async (path: string): Promise<void> => {
   await dir.removeEntry(fileName(path)).catch(() => {})
 }
 
-/** Every take file currently in OPFS — used to reconcile against the saved EDL on open. */
+/** Reconciled against the saved EDL on open, to find orphaned files. */
 export const listTakePaths = async (): Promise<string[]> => {
   const dir = await takesDir()
   const paths: string[] = []
@@ -98,9 +87,8 @@ export interface QuotaCheck {
 }
 
 /**
- * Before a session, warn if free space is under a few times the expected take size —
- * Safari's ~1 GB/origin with eviction under pressure is the real constraint. Also asks the
- * browser to persist the origin; treat a refusal as the default rather than a blocker.
+ * Safari caps an origin at ~1 GB and evicts under pressure, so warn when free space is under
+ * a few times the expected take size. A refused persist request is the default, not a blocker.
  */
 export const checkQuota = async (expectedBytes: number): Promise<QuotaCheck> => {
   let persisted = false

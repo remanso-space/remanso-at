@@ -7,10 +7,8 @@ import type { Session, Take } from "../../modules/studio/edl.types"
 import { addSlot, newSlot } from "../../modules/studio/musicSlots"
 import ProgrammeTimeline from "./ProgrammeTimeline.vue"
 
-// The slot ops and snap index have their own pure specs; this covers the spatial wiring the
-// bar adds — a click on open track drops a break at that second, the × removes one, and a drag
-// re-pins a slot to an absolute second. jsdom has no layout or pointer capture, so both are
-// stubbed: a 300 px bar over a 30 s programme makes 10 px = 1 s.
+// jsdom has no layout or pointer capture, so both are stubbed: a 300 px bar over a 30 s
+// programme makes 10 px = 1 s.
 
 const take: Take = {
   id: "t1",

@@ -1,10 +1,9 @@
 import { decodePeaks, encodePeaks, type Peaks } from "./peaks"
 
-// Peaks live beside the takes in OPFS, in their own directory so a reconcile pass can
-// tell a take (irreplaceable) from a derived artefact (recomputable in a second). They
-// are written once when a take is analysed and read back when the review view mounts.
+// Peaks get their own OPFS directory so a reconcile pass can tell a take (irreplaceable)
+// from a derived artefact (recomputable in a second).
 //
-// Browser-coupled, like opfsTakes.ts; verified in the app, not jsdom.
+// OPFS is unavailable in jsdom, so nothing here is unit-tested — it is verified in the app.
 
 const PEAKS_DIR = "peaks"
 
@@ -15,7 +14,6 @@ const peaksDir = async (): Promise<FileSystemDirectoryHandle> => {
 
 const fileName = (path: string): string => path.replace(`${PEAKS_DIR}/`, "")
 
-/** Write a take's peaks and hand back the path for `take.peaksPath`. */
 export const writePeaks = async (takeId: string, peaks: Peaks): Promise<string> => {
   const dir = await peaksDir()
   const name = `${takeId}.peaks`

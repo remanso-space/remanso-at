@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, useTemplateRef } from "vue"
 
-// Unlisted scratch page for picking a favicon. Every candidate is the current
-// flower mark with a different ripple treatment drawn around it. Clicking one
-// swaps the live <link rel="icon"> so the choice can be judged where it will
-// actually be seen — the browser tab.
+// Unlisted scratch page for picking a favicon. Clicking a candidate swaps the live
+// <link rel="icon"> so the choice is judged where it will be seen — the browser tab.
 
 type Stroke = { d: string; alpha: number }
 
@@ -96,9 +94,8 @@ const tiny = useTemplateRef<HTMLCanvasElement[]>("tiny")
 const picked = ref("")
 
 /**
- * Draw one candidate into a square canvas. Geometry is authored in a 64×64
- * grid and scaled, so the same numbers drive the 128px study and the 32px
- * favicon; only the stroke weight is re-tuned per size.
+ * Geometry is authored in a 64×64 grid and scaled, so the same numbers drive the 128px study
+ * and the 32px favicon; only the stroke weight is re-tuned per size.
  */
 function draw(canvas: HTMLCanvasElement, mark: HTMLImageElement, c: Candidate, px: number) {
   const ctx = canvas.getContext("2d")

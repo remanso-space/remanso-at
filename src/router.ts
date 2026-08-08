@@ -3,8 +3,8 @@ import type { RouteRecordRaw } from "vue-router"
 
 import HomeView from "./views/HomeView.vue"
 
-// Deep links stay anonymous — no navigation guards. /studio renders a signed-out
-// pitch rather than redirecting, so a shared link never bounces to sign-in.
+// No navigation guards: /studio renders a signed-out pitch rather than redirecting, so a
+// shared link never bounces to sign-in.
 const routes: RouteRecordRaw[] = [
   { path: "/", name: "home", component: HomeView },
   {

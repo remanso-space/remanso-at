@@ -8,9 +8,6 @@ import { encodeOpus } from "./mediaCodec"
 import { addSlot, fillSlot, newSlot } from "./musicSlots"
 import { publishSession } from "./publishSession"
 
-// Encode and upload are the browser-coupled ends of the chain; everything between them is
-// the real EDL and the real renderer, so what is under test here is the plumbing: which
-// rkey the recording is written at, and what the studio is left holding afterwards.
 vi.mock("./mediaCodec", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./mediaCodec")>()),
   encodeOpus: vi.fn(),
@@ -101,8 +98,7 @@ describe("publishSession", () => {
     })
   })
 
-  // CC-BY is the only licence that asks for anything, so it is the only one that appears —
-  // in the record for machines, and under the markdown link for whoever reads the note.
+  // CC-BY is the only licence that asks for anything, so it is the only one that appears.
   it("carries CC-BY credits into the record and under the link", async () => {
     const pick: MusicPick = {
       opfsPath: "cues/pad.mp3",

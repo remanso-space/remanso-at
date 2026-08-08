@@ -1,10 +1,7 @@
-// Hand-written from lexicons/space/remanso/note.json. remanso.at does not render
-// notes (that stays on remanso.space), but the studio lists your published notes
-// to pick one to record against, so it reads these records.
+// Hand-written from lexicons/space/remanso/note.json.
 //
-// Corrects the drift the plan flagged: fontSize is `integer` in the lexicon, so
-// it is typed `number` here — remanso.space's copy says `string`. theme,
-// discoverable and language are added from the lexicon in the same pass.
+// `fontSize` is `integer` in the lexicon and typed `number` here; remanso.space's copy of
+// these types says `string` and is the one that drifted.
 export interface PublicNoteBlob {
   $type: string
   ref: { $link: string }

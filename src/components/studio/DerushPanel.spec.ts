@@ -6,10 +6,6 @@ import { addTake, newSession, speechTrack } from "../../modules/studio/edl"
 import type { Session, Take } from "../../modules/studio/edl.types"
 import DerushPanel from "./DerushPanel.vue"
 
-// The keyboard is the derush interface, so this covers the wiring the pure specs cannot:
-// a key reaches the right pure function, the resulting EDL leaves as an `edit`, and keys
-// stay out of the way while you are typing a title.
-
 vi.mock("../../modules/studio/opfsTakes", () => ({
   // Null keeps the component off URL.createObjectURL, which jsdom does not have.
   readTakeFile: vi.fn(async () => null),

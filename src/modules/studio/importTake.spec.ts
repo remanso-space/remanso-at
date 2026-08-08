@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { IMPORT_ACCEPT, takeExtensionFor } from "./importTake"
 
-// `importTake` itself writes to OPFS, which jsdom has no implementation of — it is verified
-// in the app. What is testable is the part that decides whether a picked file is readable at
-// all, and that is where the wrong answer costs the author a take.
+// `importTake` writes to OPFS, which jsdom has no implementation of; it is verified in the
+// app. What is testable is the part deciding whether a picked file is readable at all.
 
 const fileOf = (name: string, type = ""): File => new File([new Uint8Array([1])], name, { type })
 

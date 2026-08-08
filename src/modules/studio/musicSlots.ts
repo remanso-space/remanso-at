@@ -7,23 +7,12 @@ import {
 } from "./edl"
 import type { Clip, MusicPick, MusicSlot, Session, SlotAnchor, SlotKind } from "./edl.types"
 
-// Music slots and the cue clips they project to (slice 7).
-//
-// A slot is what an author actually wants to say: "something calm under the intro". It names
-// a moment, a length and a track, and nothing else. The clips the renderer needs — trimmed,
-// faded, ducked, looped to fill — are *derived* from the slots on every read rather than
-// stored beside them. That is the whole design: there is one place a slot's length lives, so
-// editing it cannot leave a stale clip behind, and undo is a slot list snapshot.
-//
-// Looping lives here too, for the same reason. A 20 s track under a 60 s slot becomes three
-// overlapping clips with a crossfade at each seam, which the assembler already knows how to
-// mix (it sums clips and fades them). No renderer change, no loop state, and the seam maths
-// is pinned by a spec instead of hiding inside the mix loop.
+// Cue clips are derived from the slots on every read, never stored beside them: a slot's
+// length lives in one place, so editing it cannot leave a stale clip behind.
 
 /** The crossfade at a loop seam. Long enough to hide the join, short enough not to smear. */
 const LOOP_CROSSFADE_SEC = 0.5
 
-/** A slot's own opening and closing fade, clamped to a third of its length. */
 const SLOT_FADE_SEC = 1
 
 /** Runaway guard: a slot cannot emit more segments than this, whatever the arithmetic says. */
@@ -37,9 +26,8 @@ interface SlotDefaults {
 }
 
 /**
- * What each kind means in numbers. An intro opens the episode over the first words, so it is
- * loud and unducked; a break lands between chapters under speech that keeps going, so it is
- * quiet and ducked; an outro plays out after the last word and needs the room an intro has.
+ * An intro opens over the first words, so it is loud and unducked; a break lands under speech
+ * that keeps going, so it is quiet and ducked; an outro plays out after the last word.
  */
 export const SLOT_DEFAULTS: Record<SlotKind, SlotDefaults> = {
   intro: { anchor: { kind: "absolute", atSec: 0 }, lengthSec: 8, gainDb: -6, duck: false },
@@ -65,7 +53,6 @@ export const removeSlot = (session: Session, slotId: string): Session => ({
   musicSlots: session.musicSlots.filter((s) => s.id !== slotId),
 })
 
-/** Patch one slot. Every panel control routes through here, so there is one write path. */
 export const updateSlot = (
   session: Session,
   slotId: string,
@@ -79,9 +66,8 @@ export const fillSlot = (session: Session, slotId: string, pick: MusicPick): Ses
   updateSlot(session, slotId, { pick, inSec: 0 })
 
 /**
- * Where a slot lands on the timeline, or null when it lands nowhere. A chapter anchor whose
- * mark a trim removed resolves to null and the slot simply does not render — the same rule
- * chapters themselves follow, rather than silently sliding the music somewhere else.
+ * Where a slot lands, or null when a trim removed the chapter it anchors to — the slot then
+ * does not render, rather than silently sliding the music somewhere else.
  */
 export const resolveAnchorSec = (session: Session, slot: MusicSlot): number | null => {
   switch (slot.anchor.kind) {
@@ -97,16 +83,12 @@ export const resolveAnchorSec = (session: Session, slot: MusicSlot): number | nu
   }
 }
 
-/** A slot is playable once it has a track and a positive length that lands somewhere. */
 const playable = (session: Session, slot: MusicSlot): boolean =>
   !!slot.pick && slot.lengthSec > 0 && resolveAnchorSec(session, slot) !== null
 
 /**
- * The clips one slot projects to. One clip when the track is long enough to cover the slot;
- * otherwise the track repeated, each repeat overlapping the last by a crossfade, with the
- * final repeat cut short so the slot ends exactly on its length. A track shorter than two
- * crossfades cannot be looped without chewing its own fades, so it plays once and the slot
- * ends early rather than stuttering.
+ * A track shorter than two crossfades cannot be looped without chewing its own fades, so it
+ * plays once and the slot ends early rather than stuttering.
  */
 export const clipsForSlot = (session: Session, slot: MusicSlot): Clip[] => {
   if (!playable(session, slot)) return []
@@ -161,20 +143,14 @@ export const clipsForSlot = (session: Session, slot: MusicSlot): Clip[] => {
   return clips
 }
 
-// —— Real breaks (slice 7): a break that pauses the recording ——
-//
-// A plain break plays quietly over speech that keeps going. A break with `pauseSpeech` is a
-// real pause: silence opens under it, the music plays into that silence, and everything after
-// — later speech, chapters, other cues — slides later by the break's length. Derived, not
-// stored, exactly like the cue track: toggling `pauseSpeech` off puts the timeline straight
-// back with nothing to undo. The one write path that needs these gaps (the render) calls
-// `applySpeechBreaks` once at its boundary and reads the returned session everywhere.
+// A break with `pauseSpeech` opens real silence under it and slides everything after it later.
+// Derived rather than stored, like the cue track: the render calls `applySpeechBreaks` once at
+// its boundary and reads the returned session everywhere.
 
-/** A break asking for a real pause, and actually playing (so the gap and the music appear together). */
+/** A break asking for a real pause, and playing — so the gap and the music appear together. */
 const isPausingBreak = (session: Session, slot: MusicSlot): boolean =>
   slot.kind === "break" && !!slot.pauseSpeech && playable(session, slot)
 
-/** Split any clip straddling `atSec`, then push it and everything after later by `lengthSec`. */
 const openGap = (clips: Clip[], atSec: number, lengthSec: number, tag: string): Clip[] => {
   const out: Clip[] = []
   for (const clip of clips) {
@@ -192,11 +168,9 @@ const openGap = (clips: Clip[], atSec: number, lengthSec: number, tag: string): 
 }
 
 /**
- * The effective session once every pausing break has opened its silence. Returns the session
- * unchanged when no break pauses. Otherwise the speech clips are split-and-shifted to hold the
- * gaps, and each pausing break is rewritten to an absolute anchor at the gap it opened — so
- * `cueClipsFromSlots` lands its music in the gap and re-applying the transform is a no-op.
- * Breaks are processed in timeline order so a second gap sits after the first one has moved it.
+ * Each pausing break is rewritten to an absolute anchor at the gap it opened, so re-applying
+ * this is a no-op. Breaks are processed in timeline order: a second gap must sit after the
+ * first one has already moved it.
  */
 export const applySpeechBreaks = (session: Session): Session => {
   const breaks = session.musicSlots
@@ -227,7 +201,6 @@ export const applySpeechBreaks = (session: Session): Session => {
   }
 }
 
-/** Every slot's clips, in slot order — the cue track, derived. */
 export const cueClipsFromSlots = (session: Session): Clip[] =>
   session.musicSlots.flatMap((slot) => clipsForSlot(session, slot))
 
@@ -236,8 +209,7 @@ export const hasMusic = (session: Session): boolean =>
   session.musicSlots.some((slot) => playable(session, slot))
 
 /**
- * The rendered length: the speech, plus any music that runs past its end (an outro does, by
- * definition). Music anchored to `speech-end` is measured against the speech alone, so this
+ * Music anchored to `speech-end` is measured against the speech alone, so the rendered length
  * is one pass and not a fixed point.
  */
 export const programmeDurationSec = (session: Session): number => {
@@ -246,7 +218,6 @@ export const programmeDurationSec = (session: Session): number => {
   return end
 }
 
-/** OPFS paths the render will need decoded. One per distinct track, however many slots use it. */
 export const musicPathsInUse = (session: Session): Set<string> => {
   const paths = new Set<string>()
   for (const slot of session.musicSlots) {
@@ -255,11 +226,7 @@ export const musicPathsInUse = (session: Session): Set<string> => {
   return paths
 }
 
-/**
- * The credits the published record must carry: CC-BY picks that actually play, one entry per
- * distinct track. CC0 asks for no attribution, so it is deliberately left out of the record
- * rather than published as a courtesy the reader then has to wonder about.
- */
+/** CC-BY picks that actually play, one entry per distinct track. CC0 asks for no attribution. */
 export const creditsToPublish = (session: Session) => {
   const bySourceUrl = new Map<string, MusicPick["credit"]>()
   for (const slot of session.musicSlots) {

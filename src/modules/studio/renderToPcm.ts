@@ -9,12 +9,9 @@ import { readCueFile } from "./opfsCues"
 import { readTakeFile } from "./opfsTakes"
 import { renderSessionInWorker } from "./renderInWorker"
 
-// The decode-then-render half of a deliverable, without the encode or upload. Publish runs
-// it and then encodes; the preview runs it and plays the samples straight back. Pulled out
-// of publishSession so "what does the final cut sound like" and "publish the final cut" are
-// the exact same assembly — a preview that lied would be worse than none.
+// Decode and render, without the encode or upload, so the preview and the publish run the
+// exact same assembly.
 
-/** A coarse, honest progress reading: a fraction and what is happening at it. */
 export interface RenderProgress {
   fraction: number
   label: string
@@ -31,7 +28,7 @@ export interface RenderToPcmParams {
   onProgress?: (progress: RenderProgress) => void
 }
 
-/** Takes the timeline still plays. A take that every edit rejected need not be decoded. */
+/** A take that every edit rejected need not be decoded. */
 const takeIdsInUse = (session: Session): Set<string> => {
   const ids = new Set<string>()
   for (const clip of speechTrack(session).clips) {
@@ -41,11 +38,7 @@ const takeIdsInUse = (session: Session): Set<string> => {
   return ids
 }
 
-/**
- * Decode whatever the EDL still references, then render the whole programme off the main
- * thread. Take and music decodes are the slow, visible part, so each reports itself; the
- * render is one opaque crunch and just brackets the last stretch of the bar.
- */
+/** Decodes whatever the EDL still references, then renders off the main thread. */
 export const renderToPcm = async ({
   session,
   takePcm = {},
@@ -58,8 +51,7 @@ export const renderToPcm = async ({
 
   const takeIds = [...takeIdsInUse(session)]
   const musicPaths = [...musicPathsInUse(session)]
-  // Weight the bar so decode owns most of it (that is where the seconds go) and the render
-  // owns the tail. A step count of at least one keeps the maths from dividing by zero.
+  // Decode owns most of the bar; a floor of one step keeps the maths from dividing by zero.
   const decodeSteps = Math.max(1, takeIds.length + musicPaths.length)
   let done = 0
   const report = (label: string) => onProgress?.({ fraction: (done / decodeSteps) * 0.8, label })

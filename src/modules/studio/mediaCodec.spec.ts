@@ -61,7 +61,7 @@ describe("bitrateFor", () => {
 describe("minutesAtTier", () => {
   it("gives more minutes for speech than for music", () => {
     expect(minutesAtTier("speech")).toBeGreaterThan(minutesAtTier("music-heavy"))
-    // Sanity against the plan's figures: ~104 min speech, ~52 min music-heavy in 50 MB.
+    // ~104 min speech, ~52 min music-heavy in 50 MB.
     expect(minutesAtTier("speech")).toBeGreaterThan(90)
     expect(minutesAtTier("music-heavy")).toBeLessThan(60)
   })

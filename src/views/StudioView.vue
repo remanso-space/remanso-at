@@ -46,22 +46,19 @@ const loadingNotes = ref(false)
 
 const title = ref("")
 
-// The EDL is the state of the studio now, and the undo stack is a list of past EDLs — the
-// review pass edits it, publish just renders whatever it says. Held shallow on purpose:
-// its snapshots are plain objects and Vue has no reason to walk into every clip.
+// Held shallow on purpose: the snapshots are plain objects and Vue has no reason to walk
+// into every clip.
 const sessionId = `session-${Date.now()}`
 const history = shallowRef(historyOf(newSession(sessionId, "")))
 const session = computed<Session>(() => history.value.present)
 const canUndo = computed(() => historyCanUndo(history.value))
 const edit = (next: Session) => (history.value = commit(history.value, next))
 
-// A recorded take is a new baseline, not an undoable step. Undo is the derush pass, and it
-// must never peel a recording back off and leave the studio with nothing to publish. Prior
-// edits are banked into this baseline; undo afterwards reaches back only to here.
+// A recorded take is a new baseline, not an undoable step: undo must never peel a recording
+// back off and leave the studio with nothing to publish.
 const recordTake = (next: Session) => (history.value = historyOf(next))
 
-// Decoded samples and the analysis overlays, by take id. Neither is reactive per-element:
-// these are megabytes of Float32Array, and only ever swapped wholesale.
+// Not reactive per-element: these are megabytes of Float32Array, only ever swapped wholesale.
 const takePcm: TakePcm = {}
 const analyses = shallowRef<Record<string, TakeAnalysis>>({})
 const selectedTakeId = ref("")
@@ -74,14 +71,11 @@ const link = ref("")
 const publishError = ref<string | null>(null)
 const copied = ref(false)
 
-// One bar, shared by publish and preview: both run the same decode-and-render, so both
-// report through the same reading and the template shows whichever is live.
+// One bar shared by publish and preview, since both run the same decode-and-render.
 const progress = ref<RenderProgress | null>(null)
 
-// The final-cut preview: render exactly what publish would — pauses removed, intro and
-// breaks assembled, chain applied — wrap it as a WAV blob and hand it to an <audio> element.
-// The element is what makes the cut walkable: native play, pause, scrub and seek, so the
-// author can jump straight to the break they are unsure about instead of sitting through it.
+// Renders exactly what publish would, wrapped as a WAV blob behind an <audio> element so
+// play, pause, scrub and seek are the browser's own.
 type PreviewState = "idle" | "rendering" | "ready"
 const previewState = ref<PreviewState>("idle")
 const previewError = ref<string | null>(null)
@@ -96,7 +90,6 @@ const revokePreviewUrl = () => {
   previewUrl.value = null
 }
 
-/** Tear the preview down: stop the element, free the blob, and forget the transport. */
 const stopPreview = () => {
   previewAudio.value?.pause()
   revokePreviewUrl()
@@ -158,8 +151,8 @@ const seekPreview = (value: string) => {
 
 onBeforeUnmount(stopPreview)
 
-// What this cut attached itself to, snapshotted at publish. The note list stays live
-// underneath, and picking another note afterwards must not rewrite the confirmation.
+// Snapshotted at publish: the note list stays live underneath, and picking another note
+// afterwards must not rewrite the confirmation.
 const attachedTo = ref<{ title: string; url: string } | null>(null)
 
 const hasProgramme = computed(() => programmeDurationSec(session.value) > 0)
@@ -175,8 +168,8 @@ const loadNotes = async () => {
 }
 
 onMounted(async () => {
-  // The single point of failure: no Opus encode means no deliverable, and there is no
-  // original to fall back to. Refuse clearly rather than fail at the end.
+  // No Opus encode means no deliverable, and there is no original to fall back to. Refuse
+  // up front rather than fail at the end.
   gate.value = (await canEncodeOpus()) ? "ok" : "unsupported"
   await recorder.refreshDevices()
   if (isLoggedIn.value) void loadNotes()
@@ -186,13 +179,9 @@ watch(isLoggedIn, (yes) => {
   if (yes) void loadNotes()
 })
 
-// The note is the thing being recorded for, so it sits with the title it fills rather than
-// at the foot of the page. Once picked, the list folds away to a single line — the pick is
-// the answer to "what is this take for", and the browse UI has served its purpose.
 const pickedUri = ref("")
 const pickedNote = computed(() => notes.value.find((n) => n.record.uri === pickedUri.value))
 
-// Browsing is the default until a note is picked; afterwards it is reopened on demand.
 const browsing = ref(false)
 const noteFilter = ref("")
 const shownNotes = computed(() => {
@@ -201,16 +190,14 @@ const shownNotes = computed(() => {
   return notes.value.filter((n) => n.record.value.title.toLowerCase().includes(query))
 })
 
-// remanso.space routes a public note at /pub/:shortDid/:rkey/:slug? — the slug is
-// decorative, so the two-segment form is enough to land on the note.
+// remanso.space routes a public note at /pub/:shortDid/:rkey/:slug?; the slug is decorative.
 const noteUrl = (did: string, rkey: string) =>
   `https://remanso.space/pub/${toShortDid(did)}/${rkey}`
 
 /**
- * Where a note of yours reads on the web. Browsing a title is often not enough to know
- * which note it is, so every row opens in a new tab — the studio session, half-recorded,
- * must survive the look. The did comes off the note's own uri rather than the session so
- * a malformed uri cannot take the whole list down with a throw.
+ * Rows open in a new tab so a half-recorded studio session survives the look. The did comes
+ * off the note's own uri rather than the session, so a malformed uri cannot take the whole
+ * list down with a throw.
  */
 const publicNoteUrl = (note: PublishedNote): string => {
   try {
@@ -228,7 +215,7 @@ const pickNote = (note: PublishedNote) => {
   noteFilter.value = ""
 }
 
-/** Record with no note behind it: the publish then hands back a link to paste instead. */
+/** Publishing with no note behind it hands back a link to paste instead. */
 const detachNote = () => {
   pickedUri.value = ""
   browsing.value = true
@@ -242,11 +229,7 @@ const startRecording = async () => {
   await recorder.start()
 }
 
-/**
- * The one decode the rest of the session lives off: peaks for the waveform, pause candidates,
- * speech onsets and a loudness reading, plus the samples publish would otherwise decode a
- * second time. Null when the bytes could not be decoded at all.
- */
+/** The one decode the rest of the session lives off. Null when the bytes would not decode. */
 const analyseTake = async (take: Take): Promise<AnalyzedTake | null> => {
   analysing.value = true
   const file = await readTakeFile(take.opfsPath)
@@ -255,7 +238,6 @@ const analyseTake = async (take: Take): Promise<AnalyzedTake | null> => {
   return analyzed
 }
 
-/** Bank a decoded take: keep its samples and overlays, write its peaks, append it to the EDL. */
 const bankTake = async (take: Take, analyzed: AnalyzedTake) => {
   const { samples, durationSec, ...analysis } = analyzed
   takePcm[take.id] = samples
@@ -267,9 +249,8 @@ const bankTake = async (take: Take, analyzed: AnalyzedTake) => {
 }
 
 /**
- * Stop and analyse. The take is appended either way — a take that failed to analyse is still
- * a take (its length was measured off the clock), and losing it to a decoder hiccup would be
- * unforgivable. An imported file has no such clock, which is why importFile drops instead.
+ * The take is appended even when the analysis fails: its length was measured off the clock,
+ * so it is still playable. An imported file has no such clock, which is why importFile drops.
  */
 const stopRecording = async () => {
   const take = await recorder.stop()
@@ -286,9 +267,6 @@ const stopRecording = async () => {
   await bankTake(take, analyzed)
 }
 
-// Audio recorded elsewhere — a phone voice memo, a field recorder, a call export — arrives on
-// the second tab and becomes an ordinary take: same OPFS directory, same analysis, same
-// derush, same publish. Recording and importing are two ways in, not two modes of the studio.
 type CaptureMode = "record" | "upload"
 const captureMode = ref<CaptureMode>("record")
 const importing = ref(false)
@@ -324,7 +302,7 @@ const importFile = async (event: Event) => {
   importing.value = false
   if (!analyzed) {
     // A recorded take survives a failed decode on its measured duration; an imported one has
-    // no such length, and a zero-length clip would render silence. Drop the bytes and say so.
+    // no such length, and a zero-length clip would render silence.
     await deleteTake(result.take.opfsPath)
     importError.value = `“${file.name}” could not be decoded. Its codec may not be supported here — re-export it as m4a or wav.`
     return
@@ -334,9 +312,8 @@ const importFile = async (event: Event) => {
 }
 
 /**
- * Delete one take for good: confirm, drop it from the EDL, then free its bytes, peaks,
- * samples and analysis. Destructive and unrecoverable, so it lands on a fresh history
- * baseline — undo must never resurrect a take whose file is already gone.
+ * Destructive and unrecoverable, so it lands on a fresh history baseline: undo must never
+ * resurrect a take whose file is already gone.
  */
 const deleteTakeById = async (takeId: string) => {
   const take = session.value.takes.find((t) => t.id === takeId)
@@ -356,7 +333,6 @@ const deleteTakeById = async (takeId: string) => {
   if (selectedTakeId.value === takeId) selectedTakeId.value = next.takes[0]?.id ?? ""
 }
 
-/** Free every take's bytes and start from an empty EDL. */
 const resetSession = async () => {
   stopPreview()
   previewError.value = null
@@ -377,14 +353,14 @@ const resetSession = async () => {
 
 const publish = async () => {
   if (!did.value || !hasProgramme.value) return
-  // Guard against a double publish: only from idle or after a prior error, never re-run
-  // while publishing or once already done (that would create a duplicate recording).
+  // Never re-run while publishing or once already done — that would create a duplicate
+  // recording.
   if (publishState.value === "publishing" || publishState.value === "done") return
 
   const note = pickedNote.value
   const noteRkey = note ? parseAtUri(note.record.uri).rkey : undefined
   // Attaching is a put at the note's rkey, so it silently replaces whatever recording is
-  // already there. That is the wanted behaviour for a second cut, and a surprise otherwise.
+  // already there — wanted for a second cut, a surprise otherwise.
   if (
     note?.attached &&
     !window.confirm(
@@ -414,7 +390,7 @@ const publish = async () => {
           ? { title: note.record.value.title, url: noteUrl(did.value, noteRkey) }
           : null
       publishState.value = "done"
-      // The row's ♪ marker is now wrong for the note we just wrote to; refetch so a later
+      // The row's ♪ marker is now wrong for the note just written to; refetch so a later
       // publish onto it warns about replacing this cut.
       if (note) void loadNotes()
     } else {
@@ -422,8 +398,8 @@ const publish = async () => {
       publishState.value = "error"
     }
   } catch (err) {
-    // A thrown render (e.g. a Worker clone failure that escapes the fallback) must not leave
-    // the button spinning on "Rendering…" forever — surface it as an error the author sees.
+    // A thrown render (a Worker clone failure escaping the fallback, say) must not leave the
+    // button spinning on "Rendering…" forever.
     publishError.value = err instanceof Error ? err.message : "Rendering failed unexpectedly."
     publishState.value = "error"
   } finally {
@@ -448,7 +424,6 @@ const copyLink = async () => {
       <p class="hw-label eyebrow">§ — the studio</p>
       <h1 class="page-title">Record it here, keep it in your PDS.</h1>
 
-      <!-- Signed out: the pitch -->
       <div v-if="!isLoggedIn" class="page-note">
         <p>
           Sign in with your atproto handle from the top of the page to record against your own PDS.
@@ -471,9 +446,6 @@ const copyLink = async () => {
             Signed in as <span class="mono">{{ handle }}</span>
           </p>
 
-          <!-- What this take is for: the note and the title it fills, side by side, because
-               the usual order is "I wrote this note, now I record it". Browsing stays one
-               click away for the other order: record first, attach afterwards. -->
           <div class="target">
             <label class="field">
               <span class="field-label">Episode title</span>
@@ -574,8 +546,6 @@ const copyLink = async () => {
             </div>
           </div>
 
-          <!-- Two ways in, one studio: record here, or bring in audio recorded elsewhere.
-               Both land as ordinary takes, so everything below this box is unchanged. -->
           <div class="capture">
             <div class="tabs" role="tablist" aria-label="How the audio gets in">
               <button
@@ -675,8 +645,6 @@ const copyLink = async () => {
             </div>
           </div>
 
-          <!-- Programme overview: chapters and music slots on one clean bar, click to add a
-               break, drag to move it -->
           <ProgrammeTimeline
             v-if="session.takes.length && publishState !== 'done'"
             :session="session"
@@ -684,7 +652,6 @@ const copyLink = async () => {
             @edit="edit"
           />
 
-          <!-- Derush: the review pass over the EDL -->
           <DerushPanel
             v-if="session.takes.length && publishState !== 'done'"
             v-model:selected-take-id="selectedTakeId"
@@ -697,7 +664,6 @@ const copyLink = async () => {
             @delete-take="deleteTakeById"
           />
 
-          <!-- Music: named slots filled from an open-licence library -->
           <MusicSlotPanel
             v-if="session.takes.length && publishState !== 'done'"
             :session="session"
@@ -705,7 +671,6 @@ const copyLink = async () => {
             @edit="edit"
           />
 
-          <!-- Publish -->
           <div v-if="session.takes.length" class="review">
             <template v-if="publishState !== 'done'">
               <div class="review-actions">
@@ -737,8 +702,6 @@ const copyLink = async () => {
                 drag the bar to jump anywhere in it, before you publish.
               </p>
 
-              <!-- The final cut as a walkable player: a WAV blob behind a plain media element,
-                   so play/pause and the scrub bar are the browser's own. -->
               <div v-if="previewState === 'ready'" class="preview-player">
                 <audio
                   ref="previewAudio"
@@ -776,7 +739,6 @@ const copyLink = async () => {
                 <span class="clock mono">{{ formatDuration(previewDurSec) ?? "0:00" }}</span>
               </div>
 
-              <!-- One bar for both render paths, with the live stage under it. -->
               <div
                 v-if="progress"
                 class="progress"
@@ -802,9 +764,6 @@ const copyLink = async () => {
               </p>
             </template>
 
-            <!-- Published: this cut is spent. Offer a fresh session, never a second publish
-                 of the same audio. Attached to a note, the recording is already where it
-                 belongs; with no note picked there is still a link to paste. -->
             <div v-else class="published">
               <template v-if="attachedTo">
                 <p class="mono done-label">Published.</p>
@@ -885,7 +844,6 @@ const copyLink = async () => {
 .signed-in .mono {
   color: var(--hw-pink-deep);
 }
-/* Title and note picker read as one decision, so they share a box. */
 .target {
   border: 1px solid var(--hw-rule);
   border-radius: 6px;
@@ -914,8 +872,6 @@ const copyLink = async () => {
   font-family: var(--hw-serif);
   color: var(--hw-ink);
 }
-/* Record and Upload are two doors into the same box, so the box is what carries the border
-   and the tabs sit on its lip — a second bordered card per tab would read as two studios. */
 .capture {
   border: 1px solid var(--hw-rule);
   border-radius: 6px;
@@ -960,7 +916,6 @@ const copyLink = async () => {
 .upload-field {
   margin-bottom: 0.75rem;
 }
-/* The picker's own button is the browser's; only the box around it is ours. */
 .file-input {
   font-family: var(--hw-mono);
   font-size: 0.85rem;
@@ -1131,7 +1086,6 @@ const copyLink = async () => {
   color: var(--hw-ink-faint);
   margin: 0.35rem 0 0;
 }
-/* An error the author must not miss: boxed, ink on a wash, not a thin grey line. */
 .big-error {
   display: flex;
   align-items: baseline;
@@ -1159,7 +1113,6 @@ const copyLink = async () => {
 .notes-head .hw-label {
   margin: 0;
 }
-/* A button that has to read as an aside, not a third action competing with Record. */
 .link-btn {
   background: none;
   border: none;
@@ -1178,8 +1131,8 @@ const copyLink = async () => {
 }
 .note-list {
   list-style: none;
-  /* A long PDS scrolls inside the list instead of burying the recorder below it. Roughly
-     seven rows tall; the inline padding keeps focus rings off the scroll edge. */
+  /* Roughly seven rows tall, so a long PDS scrolls inside the list instead of burying the
+     recorder below it. The inline padding keeps focus rings off the scroll edge. */
   max-height: 14rem;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1219,28 +1172,23 @@ const copyLink = async () => {
   outline-offset: 2px;
   border-radius: 2px;
 }
-/* Deliberately not named after DaisyUI's pill component. That name is a live component
-   class, so these spans were painted as a full pill — border, padding, and a
-   background-color off --color-base-100 — on top of the two declarations below. Under the
-   dark theme that base flipped to navy while the glyph kept its hardcoded dark ink, and
-   the dash vanished. The name is spelled out nowhere here on purpose: Tailwind scans this
-   file as raw text, so writing it even inside a comment re-emits the dead component rule
-   (the same doc-scanning trap that src/style.css uses `source(none)` to avoid). */
+/* Deliberately not named after DaisyUI's pill component: that name is a live component
+   class, and Tailwind scans this file as raw text — writing it even inside a comment
+   re-emits the component rule, which paints these spans as a full pill and makes the dash
+   vanish under the dark theme. */
 .audio-flag {
-  /* --hw-pink-deep is raw editorial pink: ~4.8:1 on a plain row but ~3.9:1 over the
-     pink-wash of a picked row — under AA, and this glyph carries meaning. --link-accent
-     re-pins the same hue to a fixed lightness (~7:1 on rows, ~5.8:1 on pink-wash). */
+  /* --hw-pink-deep is ~4.8:1 on a plain row but ~3.9:1 over a picked row's pink-wash, under
+     AA for a glyph that carries meaning. --link-accent re-pins the same hue to a fixed
+     lightness: ~7:1 on rows, ~5.8:1 on pink-wash. */
   color: var(--link-accent);
   font-size: 0.9rem;
 }
-/* The "no audio" dash must still read under a browser-forced dark mode (Dark Reader /
-   Chrome auto-dark). Mid-greys like ink-soft/ink-faint invert to mid-greys and collapse
-   to ~2:1 on the inverted-dark row. Full ink is an extreme luminance, so it inverts to a
-   near-white that stays legible either way. */
+/* Must still read under a browser-forced dark mode (Dark Reader, Chrome auto-dark). Mid-greys
+   like ink-soft/ink-faint invert to mid-greys and collapse to ~2:1 on the inverted row; full
+   ink is an extreme luminance and inverts to a legible near-white. */
 .audio-flag-mute {
   color: var(--hw-ink);
 }
-/* The arrow off to the row's edge: reachable, never louder than the title it follows. */
 .note-open {
   color: var(--link-accent);
   font-size: 0.85rem;

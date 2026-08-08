@@ -6,13 +6,8 @@ import type { Marker } from "../../modules/studio/edl.types"
 import type { Cut } from "../../modules/studio/pauses"
 import { peaksForColumns, type Peaks } from "../../modules/studio/peaks"
 
-// The take, drawn once per frame that matters: precomputed peaks as the body, and every
-// analysis the derush pass has to offer laid over it — what the EDL still keeps, what it
-// has removed, the pause candidates, the speech onsets, the live flags, the in/out region
-// and the playhead.
-//
-// Everything here is in *take* seconds. The timeline moves under every edit; the take
-// does not, so a flag stamped at capture and a cut proposed after it always line up.
+// Everything here is in *take* seconds. The timeline moves under every edit; the take does
+// not, so a flag stamped at capture and a cut proposed after it always line up.
 
 const props = defineProps<{
   peaks: Peaks | null
@@ -39,9 +34,9 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 const probe = ref<HTMLSpanElement | null>(null)
 const width = ref(0)
 
-// CSS custom properties here are color-mix() expressions, which not every canvas
-// implementation parses. Resolving them through a probe element's computed `color` hands
-// back a plain rgb() every browser accepts.
+// These custom properties are color-mix() expressions, which not every canvas implementation
+// parses. Resolving them through a probe element's computed `color` hands back a plain rgb()
+// every browser accepts.
 const resolve = (variable: string, fallback: string): string => {
   const el = probe.value
   if (!el) return fallback
@@ -88,14 +83,13 @@ const draw = () => {
   const mid = (top + bottom) / 2
   const half = (bottom - top) / 2
 
-  // The in/out region, under everything, so the waveform stays readable inside it.
   if (props.inSec !== null && props.outSec !== null && props.outSec > props.inSec) {
     ctx.fillStyle = wash
     ctx.fillRect(secToX(props.inSec), top, secToX(props.outSec) - secToX(props.inSec), bottom - top)
   }
 
-  // The body. A column the EDL has removed is drawn faint rather than hidden — you need
-  // to see what you cut to be able to put it back.
+  // A column the EDL has removed is drawn faint rather than hidden: you need to see what you
+  // cut to be able to put it back.
   const columns = peaksForColumns(
     props.peaks ?? { binsPerSec: 100, bins: new Uint8Array(0) },
     props.durationSec,
@@ -107,7 +101,7 @@ const draw = () => {
     ctx.fillRect(x, mid - amplitude, 1, amplitude * 2)
   }
 
-  // Pause candidates, in their own lane at the foot: proposals, never applied silently.
+  // Pause candidates get their own lane at the foot: proposals, never applied silently.
   ctx.fillStyle = leaf
   ctx.globalAlpha = 0.55
   for (const cut of props.cuts) {
@@ -116,25 +110,23 @@ const draw = () => {
   }
   ctx.globalAlpha = 1
 
-  // Speech onsets — where a line begins, and what a rejected region should snap to.
+  // Speech onsets: where a line begins, and what a rejected region should snap to.
   ctx.fillStyle = ink
   ctx.globalAlpha = 0.35
   for (const onset of props.onsets) ctx.fillRect(secToX(onset), mid - 3, 1, 6)
   ctx.globalAlpha = 1
 
-  // Flags, in the lane above: a mark is a tick, a retake is a full-height stem.
+  // A mark is a tick, a retake is a full-height stem.
   for (const flag of props.flags) {
     const x = secToX(flag.atTakeSec)
     ctx.fillStyle = flag.kind === "retake" ? pink : ink
     ctx.fillRect(x, 0, 1.5, flag.kind === "retake" ? HEIGHT : FLAG_LANE)
   }
 
-  // In and out handles.
   ctx.fillStyle = accent
   if (props.inSec !== null) ctx.fillRect(secToX(props.inSec) - 1, top, 2, bottom - top)
   if (props.outSec !== null) ctx.fillRect(secToX(props.outSec) - 1, top, 2, bottom - top)
 
-  // The playhead, last, over everything.
   ctx.fillStyle = pink
   ctx.fillRect(secToX(props.playheadSec), 0, 1.5, HEIGHT)
 }
@@ -153,9 +145,9 @@ const onDown = (event: MouseEvent) => {
 const onUp = (event: MouseEvent) => {
   if (dragFrom === null) return
   const to = secAt(event)
-  // A drag sets the region; a click is a seek. Slop is measured in pixels, not take-seconds:
-  // xToSec scales by duration, so a seconds threshold shrinks to sub-pixel on a long take and
-  // every click reads as a region — the playhead could never be placed by clicking. 4 px.
+  // Slop is measured in pixels, not take-seconds: xToSec scales by duration, so a seconds
+  // threshold shrinks to sub-pixel on a long take and every click would read as a region,
+  // leaving the playhead unplaceable by clicking.
   if (Math.abs(event.clientX - dragFrom.x) > 4)
     emit("region", Math.min(dragFrom.sec, to), Math.max(dragFrom.sec, to))
   else emit("seek", to)
@@ -178,10 +170,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => observer?.disconnect())
 
-// Shallow on purpose. The playhead moves every frame, and a deep watcher would walk the
-// take's peaks — tens of thousands of entries — sixty times a second to discover that
-// nothing in them changed. Every other input is replaced wholesale when it changes, so
-// identity is enough.
+// Shallow on purpose: the playhead moves every frame, and a deep watcher would walk the
+// take's peaks — tens of thousands of entries — sixty times a second. Every other input is
+// replaced wholesale when it changes, so identity is enough.
 watch(() => props.playheadSec, draw)
 watch(
   () => [

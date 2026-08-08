@@ -1,10 +1,8 @@
-// Imported cue files (music, sound effects) live in their own OPFS directory next to the
-// takes — same origin, same quota, so a 40 MB music file plus an hour of takes is a real
-// budget question on Safari's ~1 GB/origin. A separate directory keeps a reconcile pass
-// able to tell a cue (re-importable by the user) from a take (irreplaceable).
+// Cue files get their own OPFS directory so a reconcile pass can tell a cue (re-importable)
+// from a take (irreplaceable). They share the takes' origin and quota, which matters against
+// Safari's ~1 GB/origin.
 //
-// Browser-coupled; verified in the app, not jsdom (OPFS is unavailable there). Mirrors
-// opfsTakes.ts.
+// OPFS is unavailable in jsdom, so nothing here is unit-tested — it is verified in the app.
 
 const CUES_DIR = "cues"
 
@@ -15,7 +13,6 @@ const cuesDir = async (): Promise<FileSystemDirectoryHandle> => {
 
 const fileName = (path: string): string => path.replace(`${CUES_DIR}/`, "")
 
-/** Store an imported cue file whole and hand back its OPFS path. */
 export const writeCueFile = async (
   cueId: string,
   file: File,
@@ -30,7 +27,6 @@ export const writeCueFile = async (
   return `${CUES_DIR}/${name}`
 }
 
-/** Read a stored cue back as a File, ready for mediabunny's BlobSource. */
 export const readCueFile = async (path: string): Promise<File | null> => {
   try {
     const dir = await cuesDir()
@@ -46,7 +42,7 @@ export const deleteCueFile = async (path: string): Promise<void> => {
   await dir.removeEntry(fileName(path)).catch(() => {})
 }
 
-/** Every cue file currently in OPFS — for the reconcile pass on open. */
+/** Reconciled against the saved EDL on open, to find orphaned files. */
 export const listCuePaths = async (): Promise<string[]> => {
   const dir = await cuesDir()
   const paths: string[] = []

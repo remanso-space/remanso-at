@@ -27,23 +27,18 @@ import { SESSION_SAMPLE_RATE } from "../../modules/studio/edl.types"
 import { formatDuration } from "../../utils/formatDuration"
 import TakeWaveform from "./TakeWaveform.vue"
 
-// The derush pass. Every edit goes through the pure functions in derush.ts and comes back
-// out as an `edit` event, so this component holds no editing logic and the parent's undo
-// stack only has to snapshot what it is handed (plan: "the EDL is a plain object").
-//
-// Keyboard is the interface — space, J/K/L, I/O, X, [ and ] — because a derush pass driven
-// by dragging is a derush pass nobody finishes. Every key also has a button, for a phone
-// and for discovering what the keys are.
+// Every edit goes through the pure functions in derush.ts and leaves as an `edit` event, so
+// this component holds no editing logic and the parent's undo stack only snapshots what it
+// is handed. Every key also has a button, for a phone and for discovering the shortcuts.
 
 const props = defineProps<{
   session: Session
   analyses: Record<string, TakeAnalysis>
   selectedTakeId: string
   canUndo: boolean
-  // The take decoded to mono PCM at SESSION_SAMPLE_RATE. Playback runs off this through
-  // WebAudio rather than an <audio> element on the compressed take: a MediaRecorder blob
-  // carries no seek index, so seeking and replay stall while the decoder scans for a
-  // keyframe. From PCM every seek is a sample offset — instant, and instantly replayable.
+  // Playback runs off this PCM through WebAudio rather than an <audio> element on the
+  // compressed take: a MediaRecorder blob carries no seek index, so seeking stalls while the
+  // decoder scans for a keyframe. From PCM every seek is a sample offset.
   pcm?: Float32Array | null
 }>()
 
@@ -55,8 +50,8 @@ const emit = defineEmits<{
 }>()
 
 const playheadSec = ref(0)
-/** Signed shuttle rate; 0 is paused. Negative scrubs backwards by walking the playhead in
- *  JS with no sound — reverse audio a media element cannot do, and reverse is for looking. */
+/** Signed; 0 is paused. Negative scrubs backwards by walking the playhead in JS, silently —
+ *  a media element cannot play audio in reverse. */
 const rate = ref(0)
 const inSec = ref<number | null>(null)
 const outSec = ref<number | null>(null)
@@ -78,15 +73,13 @@ const hasRegion = computed(
 )
 const programmeSec = computed(() => speechDurationSec(props.session))
 
-// ── transport ───────────────────────────────────────────────────────────────────────
-// Playback is WebAudio off the take's decoded PCM. Forward runs a one-shot buffer source
-// and reads position off the audio clock; reverse and pause walk the playhead in JS. Every
-// seek is a fresh source started at a sample offset, so there is no decoder stall to wait on.
+// Forward playback runs a one-shot buffer source and reads position off the audio clock;
+// reverse and pause walk the playhead in JS.
 
 let ctx: AudioContext | null = null
 let buffer: AudioBuffer | null = null
 let node: AudioBufferSourceNode | null = null
-// Anchors for the forward audio clock: position = anchorSec + (ctx.currentTime - anchorCtx) * rate.
+// position = anchorSec + (ctx.currentTime - anchorCtx) * rate.
 let anchorCtx = 0
 let anchorSec = 0
 
@@ -98,16 +91,15 @@ const ensureBuffer = () => {
   if (!pcm || pcm.length === 0) return
   if (!ctx) ctx = new AudioContext({ sampleRate: SESSION_SAMPLE_RATE })
   buffer = ctx.createBuffer(1, pcm.length, SESSION_SAMPLE_RATE)
-  // A bare `Float32Array` now means `Float32Array<ArrayBufferLike>`, and copyToChannel
-  // rejects a possibly-shared buffer. Every take's PCM is allocated here, never from a
-  // SharedArrayBuffer, so the narrowing is a statement of fact rather than a risk.
+  // A bare `Float32Array` means `Float32Array<ArrayBufferLike>`, and copyToChannel rejects a
+  // possibly-shared buffer. Every take's PCM is allocated here, never from a SharedArrayBuffer.
   buffer.copyToChannel(pcm as Float32Array<ArrayBuffer>, 0)
 }
 
 const stopNode = () => {
   if (!node) return
-  // Drop onended before stopping: it is only meant to fire when playback runs off the end,
-  // not when we tear a source down to re-seek or pause.
+  // Drop onended before stopping: it should only fire when playback runs off the end, not
+  // when a source is torn down to re-seek or pause.
   node.onended = null
   try {
     node.stop()
@@ -118,8 +110,7 @@ const stopNode = () => {
   node = null
 }
 
-// Start forward playback from `fromSec`. A source node is single-use, so seeking and
-// shuttle-rate changes all route through here — each is just a new source at a new offset.
+// A source node is single-use, so seeking and shuttle-rate changes all route through here.
 const startPlayback = (fromSec: number) => {
   ensureBuffer()
   stopNode()
@@ -146,7 +137,7 @@ const applyRate = () => {
   else stopNode() // 0 = paused, negative = silent reverse scrub in the frame loop
 }
 
-// Sync flush so the source starts inside the click that set the rate — a microtask later can
+// Sync flush so the source starts inside the click that set the rate: a microtask later can
 // fall outside the user-gesture window some autoplay policies check to resume the context.
 watch(rate, applyRate, { flush: "sync" })
 
@@ -161,7 +152,6 @@ const seek = (sec: number) => {
 const togglePlay = () => (rate.value = rate.value === 0 ? 1 : 0)
 const shuttle = (direction: 1 | -1) => (rate.value = nextShuttleRate(rate.value, direction))
 
-// Rebuild against the newly selected take's PCM and rewind the transport.
 watch(
   selectedTake,
   () => {
@@ -185,9 +175,8 @@ const frame = (now: number) => {
 
   if (rate.value > 0 && ctx && node) {
     let pos = anchorSec + (ctx.currentTime - anchorCtx) * rate.value
-    // Playback hears the programme, not the tape: while running forward, jump whatever the
-    // EDL has removed. (Reverse is left alone below, so you can still look at a rejected
-    // region before putting it back.)
+    // Playback hears the programme, not the tape: running forward, jump whatever the EDL has
+    // removed. Reverse is left alone, so a rejected region can still be reviewed.
     if (skipRemoved.value) {
       const next = nextKeptSec(kept.value, pos)
       if (next === null) rate.value = 0
@@ -204,8 +193,8 @@ const frame = (now: number) => {
       playheadSec.value = Math.min(dur, pos)
     }
   } else if (rate.value < 0) {
-    // Reverse scrub: no reverse audio, just walk the marker back off its own last value so a
-    // stalled clock can never freeze it.
+    // No reverse audio: walk the marker back off its own last value, so a stalled clock can
+    // never freeze it.
     const pos = Math.max(0, playheadSec.value + rate.value * dt)
     playheadSec.value = pos
     if (pos <= 0) rate.value = 0
@@ -213,15 +202,13 @@ const frame = (now: number) => {
   raf = requestAnimationFrame(frame)
 }
 
-// ── edits ───────────────────────────────────────────────────────────────────────────
-
 const clearRegion = () => {
   inSec.value = null
   outSec.value = null
 }
 
-// Setting one end past the other drops the other rather than swapping: you meant the mark
-// you just placed, and a silently reversed region is how you reject the wrong four seconds.
+// Setting one end past the other drops the other rather than swapping: a silently reversed
+// region is how you reject the wrong four seconds.
 const setIn = () => {
   inSec.value = playheadSec.value
   if (outSec.value !== null && outSec.value <= inSec.value) outSec.value = null
@@ -274,10 +261,8 @@ const toggleMute = (take: Take) =>
 
 const solo = (take: Take) => emit("edit", soloTake(props.session, take.id))
 
-// ── chapters ──────────────────────────────────────────────────────────────────────────
-// A chapter is dropped against the take at the playhead, in take seconds, so it rides
-// through every later edit and projects to the timeline at render — and doubles as a cue
-// snap target.
+// A chapter is stored in take seconds, so it rides through every later edit and projects to
+// the timeline at render.
 
 const dropChapter = () => {
   const take = selectedTake.value
@@ -291,8 +276,6 @@ const chapters = computed(() =>
     atTimelineSec: projectChapterToTimeline(props.session, c),
   })),
 )
-
-// ── keyboard ────────────────────────────────────────────────────────────────────────
 
 const FORM_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"])
 
@@ -377,7 +360,6 @@ const lufsLabel = (takeId: string): string => {
       </p>
     </div>
 
-    <!-- Take list: pick one to review, mute or solo it for best-of-N -->
     <ul class="takes">
       <li
         v-for="t in session.takes"
@@ -494,7 +476,6 @@ const lufsLabel = (takeId: string): string => {
         </li>
       </ul>
 
-      <!-- Chapters: a mark against the take at the playhead; a cue snap target too -->
       <div class="chapters">
         <button
           class="btn"
@@ -678,10 +659,8 @@ const lufsLabel = (takeId: string): string => {
   color: var(--hw-ink-faint);
 }
 
-/* Derush on a phone. The keyboard shortcuts this panel is built around do not exist
-   there, so every one of these controls is pressed with a thumb — and the desktop sizes
-   land at 40 px, the checkbox at 13. Only the boxes grow; the type stays as it is, and
-   the layout is unchanged above 640 px. Same breakpoint as StudioView's page padding. */
+/* No keyboard on a phone, so every control here is thumbed — and the desktop sizes land at
+   40 px, the checkbox at 13, under the 44 px minimum target. Only the boxes grow. */
 @media (max-width: 640px) {
   .derush {
     padding: 1rem;
@@ -699,8 +678,7 @@ const lufsLabel = (takeId: string): string => {
   .btn.tiny {
     padding: 0.2rem 0.6rem;
   }
-  /* A native checkbox does not take a height; the label around it is the target, and the
-     box itself is scaled to something a thumb can aim at. */
+  /* A native checkbox does not take a height, so the label around it is the target. */
   .check {
     min-height: 44px;
   }
@@ -708,8 +686,7 @@ const lufsLabel = (takeId: string): string => {
     width: 24px;
     height: 24px;
   }
-  /* The take rows and chapter rows are pressable across their whole width already; they
-     just need the height. */
+  /* Already pressable across their whole width; they just need the height. */
   .take-pick,
   .chapter {
     min-height: 44px;

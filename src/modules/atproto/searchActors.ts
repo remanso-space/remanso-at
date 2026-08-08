@@ -1,11 +1,9 @@
-// The handle picker in /listen. Typing a handle from memory is fine for your own, but there
-// is no way to discover anyone else's, so the box searches the network: the public Bluesky
-// appview indexes every atproto handle and answers typeahead unauthenticated, which keeps
-// /listen usable while signed out.
+// The public Bluesky appview indexes every atproto handle and answers typeahead
+// unauthenticated, which keeps the /listen handle picker usable while signed out.
 
 const PUBLIC_API = "https://public.api.bsky.app"
 
-/** One suggestion. `handle` is what /listen navigates by; the rest is only for display. */
+/** `handle` is what /listen navigates by; the rest is only for display. */
 export interface ActorSuggestion {
   did: string
   handle: string
@@ -13,7 +11,6 @@ export interface ActorSuggestion {
   avatar?: string
 }
 
-/** A `ProfileViewBasic`, narrowed to the fields a suggestion row shows. */
 interface ProfileViewBasic {
   did: string
   handle: string
@@ -22,9 +19,8 @@ interface ProfileViewBasic {
 }
 
 /**
- * Handles matching a typed prefix, best match first. Never throws and never rejects: a
- * suggestion list is a convenience, and a network hiccup should leave the box behaving like
- * a plain text field rather than showing an error.
+ * Never throws and never rejects: a network hiccup leaves the box behaving like a plain text
+ * field rather than showing an error.
  */
 export const searchActors = async (
   query: string,

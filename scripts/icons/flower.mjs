@@ -1,9 +1,6 @@
-// Flat vector redraw of the red-ginger mark, for icon sizes where the watercolour
-// `public/mark.png` turns to mush (16-64px). Authored in a 100x100 grid, centred:
-// content spans x 15..85, y 14..86, so the drawing's own centre is (50, 50).
-//
-// The watercolour stays the mark everywhere it has room to breathe — the landing
-// hero and the 180px-and-up icons. This is only the small-size stand-in.
+// Flat vector redraw of the red-ginger mark, for the 16-64px sizes where the watercolour
+// `public/mark.png` turns to mush. Authored in a 100x100 grid, centred: content spans
+// x 15..85, y 14..86, so the drawing's own centre is (50, 50).
 
 /** @typedef {{ d: string, role: string, width?: number }} Shape */
 

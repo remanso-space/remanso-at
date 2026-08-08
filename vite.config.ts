@@ -17,9 +17,8 @@ export default defineConfig({
       // Without this the dev server registers no service worker at all, so needRefresh
       // never flips and the update toast is unreachable outside a production build.
       devOptions: { enabled: true, type: "module", navigateFallback: "index.html" },
-      // Deliberately omits favicon.png, which remanso.space does include. It is the
-      // 1.4 MB source image for the asset generator and nothing in the HTML references
-      // it, so precaching it would be ~22x the size of the entire JS bundle.
+      // Omits favicon.png: it is the 1.4 MB source image for the asset generator, referenced
+      // nowhere in the HTML, and precaching it would be ~22x the whole JS bundle.
       includeAssets: [
         "favicon.ico",
         "favicon.svg",
@@ -32,9 +31,8 @@ export default defineConfig({
         "maskable-icon-512x512.png",
         "monochromeicon.png",
       ],
-      // Same mark and colour as remanso.space, different name. short_name is what a
-      // launcher labels the icon with, and "Remanso Studio" truncates there, so the two
-      // installed apps read as "Remanso" and "Studio" under the identical mark.
+      // short_name is what a launcher labels the icon with, and "Remanso Studio" truncates
+      // there — so the two installed apps read as "Remanso" and "Studio".
       manifest: {
         name: "Remanso Studio",
         short_name: "Studio",

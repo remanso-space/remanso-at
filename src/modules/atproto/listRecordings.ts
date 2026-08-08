@@ -4,9 +4,8 @@ import { NOTE_COLLECTION } from "./publishedNotes"
 import { RECORDING_COLLECTION, type Recording } from "./recording.types"
 import { toShortDid } from "./shortDid"
 
-// /listen reads recordings straight off the PDS with listRecords — public and
-// unauthenticated, so a shared link plays for a reader who has no account and the author
-// sees their own cuts the moment the studio publishes them, with no appview in between.
+// listRecords is public and unauthenticated, so a shared link plays for a reader with no
+// account and there is no appview lag between publishing and seeing the cut.
 
 const PAGE_LIMIT = 100
 /** Enough note pages to name the recordings on any plausible repo without walking forever. */
@@ -16,7 +15,6 @@ export interface ListenRecording {
   uri: string
   rkey: string
   value: Recording
-  /** Direct playback URL — the blob on the author's own PDS. */
   audioUrl: string
   /** The note this recording is attached to, when a note sits at the same rkey. */
   note: { title: string; url: string } | null
@@ -44,16 +42,13 @@ const listRecordsUrl = (pds: string, did: string, collection: string, cursor?: s
   return `${pds}/xrpc/com.atproto.repo.listRecords?${query}`
 }
 
-// remanso.space routes a public note at /pub/:shortDid/:rkey/:slug? — the slug is
-// decorative, so the two-segment form lands on the note.
+// remanso.space routes a public note at /pub/:shortDid/:rkey/:slug?; the slug is decorative.
 const noteUrl = (did: string, rkey: string) =>
   `https://remanso.space/pub/${toShortDid(did)}/${rkey}`
 
 /**
- * rkey → note title across the repo. A recording at rkey R is the recording of the note at
- * rkey R, so this is the only thing that turns a bare recording into "the audio of this
- * episode". An empty map on failure: the titles are an annotation, and losing them is no
- * reason to withhold the audio.
+ * A recording at rkey R is the recording of the note at rkey R, so this map is the only thing
+ * naming a bare recording. Failure returns an empty map rather than withholding the audio.
  */
 export const listNoteTitles = async (pds: string, did: string): Promise<Map<string, string>> => {
   const titles = new Map<string, string>()
@@ -83,10 +78,7 @@ export const listNoteTitles = async (pds: string, did: string): Promise<Map<stri
   }
 }
 
-/**
- * One page of an author's recordings, newest first, each with a playable URL and the note
- * it belongs to. `actor` is a DID or a handle.
- */
+/** `actor` is a DID or a handle. */
 export const listRecordings = async ({
   actor,
   cursor,

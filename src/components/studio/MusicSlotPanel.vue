@@ -25,12 +25,11 @@ import {
 import { snapPoints } from "../../modules/studio/snap"
 import { formatDuration } from "../../utils/formatDuration"
 
-// Music slots: name a moment, put a track under it. The panel never edits clips — every
-// control writes one field on one slot, and the cue track the renderer sees is projected
-// from those slots. So there is nothing here to keep in sync and nothing to drag.
+// The panel never edits clips: every control writes one field on one slot, and the cue track
+// is projected from those slots.
 //
-// The picker previews straight from the provider's CDN and writes to OPFS only when a
-// result is picked, so browsing costs nothing but the search request.
+// The picker previews straight from the provider's CDN and writes to OPFS only once a result
+// is picked, so browsing costs nothing but the search request.
 
 const props = defineProps<{
   session: Session
@@ -42,7 +41,7 @@ const emit = defineEmits<{ edit: [session: Session] }>()
 let counter = 0
 const nextId = () => `slot-${Date.now()}-${(counter += 1)}`
 
-// The rendered length, real-break silences included — so the bitrate/minutes budget is honest.
+// Real-break silences included, so the bitrate/minutes budget is honest.
 const programmeSec = computed(() => programmeDurationSec(applySpeechBreaks(props.session)))
 const slots = computed(() => props.session.musicSlots)
 
@@ -106,7 +105,7 @@ const remove = (slotId: string) => {
   emit("edit", removeSlot(props.session, slotId))
 }
 
-/** What a slot resolves to, said plainly — "nowhere" is a real state worth showing. */
+/** "nowhere" is a real state worth showing. */
 const slotWhere = (slot: MusicSlot): string => {
   const atSec = resolveAnchorSec(props.session, slot)
   if (atSec === null) return "its chapter was edited out"
@@ -120,8 +119,6 @@ const slotWhere = (slot: MusicSlot): string => {
   const looped = parts.length > 1 ? ` · looped ×${parts.length}` : ""
   return `${formatDuration(atSec) ?? "0:00"} · ${slot.lengthSec}s${looped}`
 }
-
-// —— The picker ——
 
 const pickerFor = ref<string | null>(null)
 const query = ref("")
@@ -189,8 +186,7 @@ const pick = async (slotId: string, result: MusicResult) => {
   pickerFor.value = null
 }
 
-// The bitrate tension, same as the cue track surfaced: what the music costs the encode and
-// how many minutes that leaves under the 50 MB blob ceiling.
+// What the music costs the encode, and how many minutes that leaves under the 50 MB ceiling.
 const tier = computed(() => contentTier(props.session))
 const kbps = computed(() => Math.round(bitrateFor(programmeSec.value, tier.value) / 1000))
 const minutesBudget = computed(() => minutesAtTier(tier.value))
@@ -499,8 +495,6 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
   color: var(--hw-pink-deep);
   border-color: var(--hw-pink);
 }
-/* Input and its Search action are one control: the button rides in the input's suffix,
-   sharing a border that lights up together on focus. */
 .search {
   display: flex;
   align-items: stretch;
@@ -546,9 +540,7 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
   padding: 0;
   margin: 0.5rem 0 0;
 }
-/* A result is four controls around a title of unknown length. On a phone they do not fit
-   on one line, and a nowrap row pushes "Use" past the right edge where no thumb can reach
-   it — so the row wraps, with the title taking the first line to itself when it has to. */
+/* A nowrap row pushes "Use" past the right edge of a phone, where no thumb can reach it. */
 .result {
   display: flex;
   align-items: center;
@@ -571,10 +563,8 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
   margin: 0.5rem 0 0;
 }
 
-/* On a phone every control here is hit with a thumb, and the desktop sizes land between
-   28 and 40 px — under the 44 px both Apple's HIG and WCAG 2.2 call a reliable target.
-   Text stays the size it was; only the box grows, so nothing about the layout changes
-   except that the controls can be pressed. Same breakpoint as StudioView's page padding. */
+/* Desktop sizes land between 28 and 40 px, under the 44 px Apple's HIG and WCAG 2.2 both
+   call a reliable touch target. Only the box grows; text stays the size it was. */
 @media (max-width: 640px) {
   .slots {
     padding: 1rem;
@@ -604,8 +594,7 @@ const hasSpeech = computed(() => speechDurationSec(props.session) > 0)
   .btn.tiny {
     padding: 0.2rem 0.6rem;
   }
-  /* The number inputs sit inside a label that also holds the word "length"/"gain"; the
-     44 px belongs to the input, not to the text next to it. */
+  /* The 44 px belongs to the input, not to the "length"/"gain" text sharing its label. */
   .lbl {
     align-items: center;
   }

@@ -4,8 +4,7 @@ import fixture from "./openverse.fixture.json"
 import { fetchToOpfs, PRESET_QUERIES, searchMusic, type MusicResult } from "./openverse"
 
 // The fixture is a real Openverse answer (see its `note`), extended with the rows the mapper
-// has to reject. Nothing here touches the network: `fetch` is passed in, so the client's own
-// arithmetic and filtering is what gets tested.
+// has to reject. `fetch` is passed in, so nothing here touches the network.
 
 vi.mock("./opfsCues", () => ({
   writeCueFile: vi.fn(

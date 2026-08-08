@@ -1,12 +1,9 @@
-// The offline render chain, as plain TypeScript so filter state crosses window
-// boundaries and the whole thing runs in a Worker with no Web Audio graph (plan:
-// "Render is a windowed streaming pass in a Worker"). Every stage carries its state in
-// plain objects, so processing a signal in one pass is bit-identical to processing it in
-// windows — the property the windowed render depends on, verified directly in the spec.
+// Plain TypeScript rather than a Web Audio graph, so the chain runs in a Worker. Every stage
+// carries its state in plain objects, which makes a one-pass render bit-identical to a
+// windowed one — the property the windowed render depends on, pinned by the spec.
 //
-// Slice 4's chain is HPF + presence shelf → normalise to -16 LUFS (two-pass) → look-ahead
-// limiter at -1 dBFS. The expander and compressor from the "podcast voice" set are a later
-// increment; their settings ride along on ChainSettings unused until then.
+// The expander and compressor settings on ChainSettings are not wired up yet; the chain is
+// HPF + presence shelf, normalise, limit.
 
 import { createLoudnessEstimator, dbToAmplitude } from "../../utils/loudness"
 import type { ChainSettings } from "./edl.types"
@@ -28,8 +25,8 @@ interface BiquadState {
 
 const freshState = (): BiquadState => ({ x1: 0, x2: 0, y1: 0, y2: 0 })
 
-// Direct form I, matching loudness.ts. State persists across windows, so a signal
-// filtered in chunks equals the same signal filtered whole.
+// Direct form I, matching loudness.ts. State persists across windows, so a signal filtered in
+// chunks equals the same signal filtered whole.
 const step = (f: Biquad, s: BiquadState, x: number): number => {
   const y = f.b0 * x + f.b1 * s.x1 + f.b2 * s.x2 - f.a1 * s.y1 - f.a2 * s.y2
   s.x2 = s.x1
@@ -81,7 +78,7 @@ export interface StreamStage {
   process: (window: Float32Array) => Float32Array
 }
 
-/** HPF then presence shelf, state carried across windows. Presence at 0 dB is skipped. */
+/** Presence at 0 dB is skipped rather than run as a unity shelf. */
 export const createChain = (settings: ChainSettings, sampleRate: number): StreamStage => {
   const hpf = designHighpass(settings.hpfHz, sampleRate)
   const hpfState = freshState()
@@ -110,11 +107,10 @@ export interface Limiter extends StreamStage {
 }
 
 /**
- * Look-ahead brick-wall limiter. A delay line holds the signal while the gain reacts to
- * the loudest sample within the look-ahead, so reduction is already in place when a peak
- * arrives. Attack is instantaneous (gain drops to exactly what the peak needs), release is
- * smoothed — which guarantees every output sample sits at or below the ceiling, never a
- * transient over. A sliding-window max over the look-ahead keeps it O(n).
+ * A delay line holds the signal while the gain reacts to the loudest sample within the
+ * look-ahead, so reduction is already in place when a peak arrives. Attack is instantaneous
+ * and release smoothed, which guarantees every output sample sits at or below the ceiling.
+ * A sliding-window max over the look-ahead keeps it O(n).
  */
 export const createLimiter = (
   ceilingDb: number,
@@ -179,11 +175,8 @@ const MIN_NORMALIZE_DB = -24
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 /**
- * Render a mono speech programme: chain it, measure its loudness over every sample, apply
- * the gain that lands it on the target, and limit to the ceiling. Two passes (measure,
- * then apply + limit), the same trick normalizeAudioFile already uses — because the gain
- * cannot be known until the whole programme has been measured. Input and output are plain
- * PCM; assembling the input from EDL clips (mediabunny decode) is the caller's job.
+ * Two passes — measure, then apply and limit — because the gain cannot be known until the
+ * whole programme has been measured.
  */
 export const renderProgramme = (
   input: Float32Array,

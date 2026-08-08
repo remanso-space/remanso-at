@@ -76,8 +76,8 @@ describe("useTakeRecorder", () => {
     expect(isRecording.value).toBe(false)
   })
 
-  // The regression: the flag gates the update toast for the whole app, so a stop that
-  // throws on the way out used to wedge it true and suppress the toast for good.
+  // The flag gates the update toast for the whole app, so a stop that throws on the way out
+  // would wedge it true and suppress the toast for good.
   it("clears the recording flag when the recorder already went inactive", async () => {
     const { isRecording } = useRecordingState()
     const recorder = withRecorder((r) => r)

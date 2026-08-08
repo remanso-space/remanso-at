@@ -1,6 +1,5 @@
-// Reading someone's recordings needs two things the OAuth session cannot give us: the
-// PDS that holds the repo, and — for a handle in the URL — the DID behind it. Both are
-// public lookups, which is what makes /listen readable while signed out.
+// The PDS holding a repo, and the DID behind a handle. Both are public lookups, which is
+// what makes /listen readable while signed out.
 
 const PLC_DIRECTORY = "https://plc.directory"
 const PUBLIC_API = "https://public.api.bsky.app"
@@ -49,16 +48,14 @@ export const pdsEndpoint = (doc: DidDoc | null): string | null => {
   return service?.serviceEndpoint?.replace(/\/$/, "") ?? null
 }
 
-/** The first handle the DID document claims, without its `at://` prefix. */
 export const docHandle = (doc: DidDoc | null): string | null => {
   const aka = doc?.alsoKnownAs?.find((entry) => entry.startsWith("at://"))
   return aka ? aka.slice("at://".length) : null
 }
 
 /**
- * The HTTPS half of handle resolution: `https://<handle>/.well-known/atproto-did` serves
- * the bare DID. A handle verifies by DNS TXT *or* this well-known, so a host that skips the
- * DNS record (and is thus invisible to bsky's resolver) still resolves here.
+ * A handle verifies by DNS TXT *or* this well-known, so a host that skips the DNS record —
+ * and is thus invisible to bsky's resolver — still resolves here.
  */
 const resolveHandleWellKnown = async (handle: string): Promise<string | null> => {
   try {
@@ -103,17 +100,13 @@ const resolveActorUncached = async (trimmed: string): Promise<ResolvedActor | nu
   return { did, pds, handle: docHandle(doc) ?? (trimmed === did ? null : trimmed) }
 }
 
-// One repo resolution can fan out across every recording it holds — the everyone feed
-// resolves each row's DID, and dozens land on the same one at once. Caching the in-flight
-// promise (not just the settled value) collapses that whole burst into a single lookup,
-// where a value-only cache would still let the concurrent misses each hit the network.
+// Caches the in-flight promise, not just the settled value: the everyone feed resolves every
+// row's DID at once, and a value-only cache would let each concurrent miss hit the network.
 const actorCache = new Map<string, Promise<ResolvedActor | null>>()
 
 /**
- * A DID or a handle in, the repo's location out. Returns null when the identity does not
- * resolve or its document names no PDS — either way there is no repo to read. Resolutions
- * are memoised per identifier for the session; a null result is not kept, so a transient
- * failure (a handle mid-propagation, a flaky network) is retried on the next call.
+ * Null when the identity does not resolve or its document names no PDS. Memoised per
+ * identifier, except for null: a transient failure is retried on the next call.
  */
 export const resolveActor = (actor: string): Promise<ResolvedActor | null> => {
   const trimmed = actor.trim().replace(/^@/, "")

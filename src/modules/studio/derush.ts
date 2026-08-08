@@ -2,16 +2,10 @@ import { clipDurationSec, speechTrack } from "./edl"
 import type { Clip, Marker, Session, Take } from "./edl.types"
 import type { Cut } from "./pauses"
 
-// The derush pass, as pure edits over the EDL. Everything the review UI does — reject a
-// region, accept a pause cut, turn a "bad take" flag into a cut, mute a take for
-// best-of-N — lands here, so the UI holds no editing logic and undo is a snapshot of the
-// value these functions return (plan: "the EDL is a plain object — snapshot it per
-// operation"). Nothing touches a take's bytes; a rejected region is a clip that stops
-// covering it.
+// Nothing here touches a take's bytes; a rejected region is a clip that stops covering it.
 //
-// Everything is expressed in *take* seconds, not timeline seconds. That is what the
-// waveform draws, what a flag records, and what survives every later edit — a timeline
-// second means something different after each ripple.
+// Everything is expressed in *take* seconds, not timeline seconds — a timeline second means
+// something different after each ripple, while take seconds survive every later edit.
 
 const withSpeechClips = (session: Session, clips: Clip[]): Session => ({
   ...session,
@@ -19,9 +13,8 @@ const withSpeechClips = (session: Session, clips: Clip[]): Session => ({
 })
 
 /**
- * Place every speech clip end to end in list order — the ripple. A muted clip is parked
- * at the cursor and consumes no time, so a best-of-N alternate stays in the EDL (and in
- * the take list) without pushing the programme out by its own length.
+ * Place every speech clip end to end in list order. A muted clip is parked at the cursor and
+ * consumes no time, so an alternate stays in the EDL without pushing the programme out.
  */
 export const relayoutSpeech = (session: Session): Session => {
   let cursor = 0
@@ -36,7 +29,7 @@ export const relayoutSpeech = (session: Session): Session => {
 const clipsOfTake = (session: Session, takeId: string): Clip[] =>
   speechTrack(session).clips.filter((c) => c.source.kind === "take" && c.source.takeId === takeId)
 
-/** What the EDL still keeps from a take, in take seconds — the waveform's kept/removed overlay. */
+/** In take seconds. */
 export interface KeptClipRange {
   clipId: string
   inSec: number
@@ -49,7 +42,6 @@ export const keptRangesForTake = (session: Session, takeId: string): KeptClipRan
     .map((c) => ({ clipId: c.id, inSec: c.inSec, outSec: c.outSec, muted: c.muted === true }))
     .sort((a, b) => a.inSec - b.inSec)
 
-/** Seconds of a take the EDL still plays — the take list's "kept" figure. */
 export const keptDurationForTake = (session: Session, takeId: string): number =>
   clipsOfTake(session, takeId).reduce(
     (total, c) => (c.muted ? total : total + clipDurationSec(c)),
@@ -57,10 +49,9 @@ export const keptDurationForTake = (session: Session, takeId: string): number =>
   )
 
 /**
- * Stop covering [fromSec, toSec] of a take. A clip that the region swallows whole is
- * dropped, one it clips at an edge is shortened, one it lands inside becomes two — the
- * same split-plus-drop the pause remover emits, which is why both go through this
- * function. The timeline is re-laid afterwards, so the removed audio ripples out.
+ * Stop covering [fromSec, toSec] of a take. A swallowed clip is dropped, one clipped at an
+ * edge is shortened, one the region lands inside becomes two. The timeline is re-laid
+ * afterwards, so the removed audio ripples out.
  */
 export const rejectTakeRange = (
   session: Session,
@@ -98,16 +89,14 @@ export const rejectTakeRange = (
   return relayoutSpeech(withSpeechClips(session, next))
 }
 
-/** Accept a whole set of pause-cut candidates at once. Cut times are take seconds. */
+/** Cut times are take seconds. */
 export const applyCuts = (session: Session, takeId: string, cuts: Cut[]): Session =>
   cuts.reduce((s, c) => rejectTakeRange(s, takeId, c.startSec, c.endSec), session)
 
 /**
- * The region a `retake` flag condemns. "That line was bad" is pressed the moment the line
- * ends, so the region runs back to whatever started it — the speech onset that opened the
- * line, or the previous flag if that is later (two retakes in a row must not overlap).
- * Returns null when nothing sits between: a retake pressed on the first frame condemns
- * nothing.
+ * The region a `retake` flag condemns. The flag is pressed once the line has ended, so the
+ * region runs back to the speech onset that opened it, or to the previous flag if that is
+ * later — two retakes in a row must not overlap. Null when nothing sits between.
  */
 export const retakeRange = (
   take: Take,
@@ -126,7 +115,6 @@ export const retakeRange = (
   return { inSec: start, outSec: at }
 }
 
-/** Every region the take's `retake` flags condemn, earliest first. */
 export const retakeRanges = (take: Take, onsets: number[]): { inSec: number; outSec: number }[] =>
   take.flags
     .filter((f) => f.kind === "retake")
@@ -142,7 +130,6 @@ export const setClipMuted = (session: Session, clipId: string, muted: boolean): 
     ),
   )
 
-/** Mute or unmute one take's clips, leaving every other take's clips exactly as they are. */
 export const setTakeMuted = (session: Session, takeId: string, muted: boolean): Session =>
   relayoutSpeech(
     withSpeechClips(
@@ -153,11 +140,7 @@ export const setTakeMuted = (session: Session, takeId: string, muted: boolean): 
     ),
   )
 
-/**
- * Best-of-N: several takes of the same passage, one kept. Solo is the whole mechanism —
- * `muted` on a clip, no new concept — and it is reversible, because the alternates stay
- * in the EDL rather than being deleted.
- */
+/** Reversible: the alternates stay in the EDL muted rather than being deleted. */
 export const soloTake = (session: Session, takeId: string): Session =>
   relayoutSpeech(
     withSpeechClips(
@@ -169,11 +152,8 @@ export const soloTake = (session: Session, takeId: string): Session =>
   )
 
 /**
- * Delete a take outright: drop the take, every speech clip cut from it, and every chapter
- * dropped against it, then re-lay the timeline so the remaining takes close the gap. Unlike
- * a mute — which parks a take in place for best-of-N and is reversible — this is the
- * destructive one: the caller also frees the take's bytes and analysis, so it belongs on a
- * fresh history baseline rather than the undo stack.
+ * Destructive, unlike a mute: the caller also frees the take's bytes and analysis, so this
+ * belongs on a fresh history baseline rather than the undo stack.
  */
 export const removeTake = (session: Session, takeId: string): Session => {
   const clips = speechTrack(session).clips.filter(
@@ -190,9 +170,8 @@ export const isTakeMuted = (session: Session, takeId: string): boolean => {
 }
 
 /**
- * Shuttle speeds for J and L. Tapping the same direction climbs the ladder; tapping the
- * other direction drops straight back to 1x that way, which is what a hand expects from a
- * jog wheel. K (rate 0) pauses.
+ * Shuttle speeds for J and L. Tapping the same direction climbs the ladder; tapping the other
+ * direction drops straight back to 1x that way. K (rate 0) pauses.
  */
 export const SHUTTLE_RATES = [1, 2, 4] as const
 
@@ -203,7 +182,7 @@ export const nextShuttleRate = (current: number, direction: 1 | -1): number => {
   return direction * SHUTTLE_RATES[Math.min(SHUTTLE_RATES.length - 1, index + 1)]
 }
 
-/** The next flag strictly after (or before) a point, for `]` and `[`. Null at the ends. */
+/** Strictly after; null at the end. */
 export const flagAfter = (flags: Marker[], sec: number): Marker | null => {
   let best: Marker | null = null
   for (const f of flags) {
@@ -223,9 +202,8 @@ export const flagBefore = (flags: Marker[], sec: number): Marker | null => {
 }
 
 /**
- * Playback skips what the EDL removed, so review hears the programme rather than the
- * tape. Given a point in the take, the next kept second: the point itself when it is
- * inside a kept range, otherwise the start of the next one, or null past the last.
+ * The point itself when it is inside a kept range, otherwise the start of the next one, or
+ * null past the last — playback skips what the EDL removed.
  */
 export const nextKeptSec = (kept: KeptClipRange[], sec: number): number | null => {
   let next: number | null = null

@@ -1,7 +1,5 @@
-// Regenerates every icon in public/ from two sources: the flat vector redraw in
-// scripts/icons/flower.mjs (small sizes, where the watercolour goes to mush) and
-// public/mark.png (180px and up, where it still reads). Both get the same two
-// concentric ripple rings.
+// Regenerates every icon in public/ from the flat vector redraw in scripts/icons/flower.mjs
+// (small sizes) and public/mark.png (180px and up).
 //
 // Run with `pnpm icons`. Committed output — this is not part of the build.
 
@@ -61,8 +59,8 @@ function ringsMarkup(px, colour, opaque = false) {
 }
 
 /**
- * Full-colour vector icon. `scale` shrinks the whole composition towards the
- * centre, which is how the maskable icon stays inside its safe circle.
+ * `scale` shrinks the composition toward the centre, keeping a maskable icon in its safe
+ * circle.
  */
 function vectorIcon({ px, mono = false, scale = 1 }) {
   const small = px < 48

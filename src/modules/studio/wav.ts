@@ -1,8 +1,6 @@
-// Wrap mono float PCM as a 16-bit PCM WAV blob. Preview-only: the deliverable is Opus (see
-// mediaCodec), but a WAV blob handed to an <audio> element gets native play, pause, scrub
-// and seek for free — which is what lets the author move around inside the final cut before
-// publishing. Trades a little size and quality (16-bit, uncompressed) for that, and for not
-// pulling the encoder into the preview path.
+// Preview only — the deliverable is Opus (see mediaCodec). A WAV blob handed to an <audio>
+// element gets native play, pause, scrub and seek for free, without pulling the encoder into
+// the preview path.
 
 export const encodeWav = (samples: Float32Array, sampleRate: number): Blob => {
   const bytesPerSample = 2

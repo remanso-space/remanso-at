@@ -158,13 +158,11 @@ describe("planCuts", () => {
     const cuts = planCuts(detectSilences(buf, SR))
 
     expect(cuts).toHaveLength(3)
-    // head removed fully
     expect(cuts[0].startSec).toBeCloseTo(0, 2)
     expect(cuts[0].endSec).toBeCloseTo(1, 1)
     // interior 1.2 s shortened: keep 0.35 after speech ends (~2.0), remove to ~3.2
     expect(cuts[1].startSec).toBeCloseTo(2.35, 1)
     expect(cuts[1].endSec).toBeCloseTo(3.2, 1)
-    // tail removed fully
     expect(cuts[2].endSec).toBeCloseTo(5.2, 1)
   })
 })

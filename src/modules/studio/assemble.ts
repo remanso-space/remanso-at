@@ -5,21 +5,10 @@ import type { Session } from "./edl.types"
 import { applySpeechBreaks, cueClipsFromSlots, hasMusic, programmeDurationSec } from "./musicSlots"
 import { createLimiter, renderProgramme, type RenderResult } from "./renderChain"
 
-// The bridge from the EDL to the renderer. Two tracks, two stages, one sum (plan: slice 6):
-//
-//   1. the speech track is laid onto a timeline buffer and run through the whole chain —
-//      HPF, presence, normalise to -16 LUFS, limit to -1 dBFS;
-//   2. the cue track — projected from the music slots, not stored — is laid onto a second
-//      buffer from decoded PCM, each clip ducked under the speech envelope and faded;
-//   3. the two are summed and a final brick-wall limiter guards the ceiling.
-//
-// The order matters and is not negotiable: the expander and compressor must see speech
-// only. Run over music the expander reads the music as signal and stops gating room tone,
-// and the compressor pumps it against every syllable. So the chain never touches a cue —
-// cues arrive already-mixed and are added to the finished voice.
-//
-// Pure: decoded take and music samples come in as maps, so the whole assembly is
-// unit-testable without a decoder or an AudioContext.
+// Stage order is not negotiable: the expander and compressor must see speech only. Run over
+// music, the expander reads the music as signal and stops gating room tone, and the compressor
+// pumps it against every syllable. So the chain never touches a cue — cues arrive already
+// mixed and are added to the finished voice.
 
 /** Decoded mono samples per take id, at the session sample rate. */
 export type TakePcm = Record<string, Float32Array>
@@ -30,11 +19,7 @@ export type CuePcm = Record<string, Float32Array>
 const equalPowerIn = (t: number) => Math.sin((t * Math.PI) / 2)
 const equalPowerOut = (t: number) => Math.cos((t * Math.PI) / 2)
 
-/**
- * Sum one clip's source window onto `out`, honouring gain, equal-power fades and an
- * optional per-sample duck envelope sampled at the timeline position. Shared by the speech
- * and cue passes so fades and bounds behave identically on both.
- */
+/** Shared by the speech and cue passes, so fades and bounds behave identically on both. */
 const mixClipInto = (
   out: Float32Array,
   src: Float32Array,
@@ -66,10 +51,8 @@ const mixClipInto = (
 }
 
 /**
- * Sum every non-muted speech clip onto one mono timeline buffer. Clips are summed rather
- * than overwritten so an intentional overlap (a crossfade at a pause cut) mixes instead of
- * clobbering. Non-take sources on the speech track are ignored — cues live on the cue
- * track and are assembled separately.
+ * Clips are summed rather than overwritten, so an intentional overlap (a crossfade at a pause
+ * cut) mixes instead of clobbering.
  */
 export const assembleSpeech = (
   session: Session,
@@ -104,11 +87,9 @@ export const assembleSpeech = (
 }
 
 /**
- * Sum the cue clips the music slots project onto one mono timeline buffer. Each clip reads
- * its window from decoded PCM; a clip with `duck: "under-speech"` is multiplied by `duckEnv`
- * at its timeline position, so the music sits down under the voice and swells in the gaps.
- * Fades are per-clip equal-power, which is also what makes a looped slot's seams inaudible:
- * the projection hands over overlapping clips whose fades cross.
+ * A clip with `duck: "under-speech"` is multiplied by `duckEnv` at its timeline position.
+ * Per-clip equal-power fades are what makes a looped slot's seams inaudible: the projection
+ * hands over overlapping clips whose fades cross.
  */
 export const assembleCues = (
   session: Session,
@@ -150,7 +131,7 @@ export interface SessionRender extends RenderResult {
   durationSec: number
 }
 
-/** Run the brick-wall limiter over a buffer as a final clip guard, length-preserving. */
+/** Length-preserving: the limiter's lookahead delay is read back out of the flushed tail. */
 const brickLimit = (buf: Float32Array, ceilingDb: number, sampleRate: number): Float32Array => {
   const limiter = createLimiter(ceilingDb, sampleRate)
   const limited = limiter.process(buf)
@@ -161,20 +142,14 @@ const brickLimit = (buf: Float32Array, ceilingDb: number, sampleRate: number): F
   return out
 }
 
-/**
- * The full render: assemble and process the speech, then — only if a music slot is actually
- * filled — assemble the cues (ducked under the speech envelope), sum them onto the finished
- * voice, and limit the sum to the ceiling. A session with no music renders as speech alone,
- * chain output untouched.
- */
+/** A session with no music renders as speech alone, chain output untouched. */
 export const renderSession = (
   session: Session,
   takePcm: TakePcm,
   sampleRate: number,
   cuePcm: CuePcm = {},
 ): SessionRender => {
-  // Open any real-break silences first, then render the effective timeline: the speech laid
-  // with its gaps, the cues (including a pausing break's own music) landing in them.
+  // Open any real-break silences first, so the cues land in the gaps the speech leaves.
   const eff = applySpeechBreaks(session)
   const speech = assembleSpeech(eff, takePcm, sampleRate)
   const rendered = renderProgramme(speech, sampleRate, session.chain)

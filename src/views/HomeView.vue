@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router"
 
-// Injected at build time from package.json — the version is written in exactly one place.
 const version = __APP_VERSION__
 </script>
 
 <template>
-  <!-- ── Hero: the ode ─────────────────────────────────── -->
   <section class="hero">
     <div class="hero-inner">
       <div class="hero-left">
@@ -36,7 +34,6 @@ const version = __APP_VERSION__
     </div>
   </section>
 
-  <!-- ── The two rooms ─────────────────────────────────── -->
   <section class="rooms">
     <div class="rooms-inner">
       <RouterLink to="/studio" class="room room-link">
@@ -76,7 +73,6 @@ const version = __APP_VERSION__
     </div>
   </section>
 
-  <!-- ── What remanso means ────────────────────────────── -->
   <section class="manifesto">
     <div class="manifesto-inner">
       <p class="hw-label">§ 01 — what remanso means</p>
@@ -89,7 +85,6 @@ const version = __APP_VERSION__
     </div>
   </section>
 
-  <!-- ── How it works ──────────────────────────────────── -->
   <section class="how">
     <div class="how-inner">
       <p class="hw-label">§ 02 — from a take to a note</p>
@@ -141,7 +136,6 @@ const version = __APP_VERSION__
         </li>
       </ol>
 
-      <!-- The attach story: the studio's best trick, and the one nobody expects. -->
       <aside class="attach">
         <p class="hw-label attach-label">the note never has to change</p>
         <p class="attach-p">
@@ -155,7 +149,6 @@ const version = __APP_VERSION__
     </div>
   </section>
 
-  <!-- ── Sibling ───────────────────────────────────────── -->
   <section class="sibling">
     <div class="sibling-inner">
       <p class="hw-label">§ 03 — one account, two tools</p>
@@ -174,7 +167,6 @@ const version = __APP_VERSION__
   font-family: var(--hw-mono);
 }
 
-/* ── Hero ────────────────────────────────────────────────── */
 .hero {
   padding: 4.5rem 2rem 3.5rem;
 }
@@ -275,7 +267,6 @@ const version = __APP_VERSION__
   }
 }
 
-/* ── Rooms ───────────────────────────────────────────────── */
 .rooms {
   padding: 1rem 2rem 3rem;
 }
@@ -295,7 +286,6 @@ const version = __APP_VERSION__
   border-radius: 6px;
 }
 
-/* The room cards are now real route links; keep them reading as cards, not links. */
 .room-link {
   display: block;
   text-decoration: none;
@@ -363,7 +353,6 @@ const version = __APP_VERSION__
   border-radius: 3px;
 }
 
-/* ── Manifesto ───────────────────────────────────────────── */
 .manifesto {
   padding: 2.5rem 2rem;
   border-top: 1px solid var(--hw-rule);
@@ -395,7 +384,6 @@ const version = __APP_VERSION__
   color: var(--hw-pink-deep);
 }
 
-/* ── How ─────────────────────────────────────────────────── */
 .how {
   padding: 2.5rem 2rem 3rem;
   border-top: 1px solid var(--hw-rule);
@@ -453,7 +441,6 @@ const version = __APP_VERSION__
   text-wrap: pretty;
 }
 
-/* The attach callout reads as a pressed-in note in the margin, not a banner ad. */
 .attach {
   margin: 2rem 0 0;
   padding: 1.4rem 1.6rem;
@@ -476,7 +463,6 @@ const version = __APP_VERSION__
   text-wrap: pretty;
 }
 
-/* ── Sibling ─────────────────────────────────────────────── */
 .sibling {
   padding: 2.5rem 2rem 3rem;
   border-top: 1px solid var(--hw-rule);
@@ -514,7 +500,6 @@ const version = __APP_VERSION__
   text-decoration: none;
 }
 
-/* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 900px) {
   .hero-inner {
     grid-template-columns: 1fr;

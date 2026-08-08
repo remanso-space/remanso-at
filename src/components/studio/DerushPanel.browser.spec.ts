@@ -8,10 +8,6 @@ import type { Session, Take } from "../../modules/studio/edl.types"
 import { asPhoneColumn, overflowing, undersizedTargets } from "../../test/mobileLayout"
 import DerushPanel from "./DerushPanel.vue"
 
-// Derush is the panel with the most controls per square centimetre — the transport, the
-// flag buttons, the chapter list, the cut review. On a phone it is also the panel an
-// author spends the longest in, so this measures whether it fits and can be pressed.
-
 vi.mock("../../modules/studio/opfsTakes", () => ({
   // Null keeps the component off a real object URL; layout is what is measured here.
   readTakeFile: vi.fn(async () => null),

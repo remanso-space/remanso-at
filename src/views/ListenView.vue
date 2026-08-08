@@ -9,10 +9,9 @@ import { listRecordings, type ListenRecording } from "../modules/atproto/listRec
 import { searchActors, type ActorSuggestion } from "../modules/atproto/searchActors"
 import { formatDuration } from "../utils/formatDuration"
 
-// Two scopes. A single repo is read straight from its PDS: `?handle=` or `?did=` picks
-// whose, and signed in with neither picks your own. With no repo in focus — signed out with
-// no handle, or an explicit `?all=1` — the everyone feed comes from the appview, the only
-// place that has seen every author's recordings.
+// Two scopes. A single repo is read straight from its PDS: `?handle=` or `?did=` picks whose,
+// and signed in with neither picks your own. With no repo in focus — signed out with no
+// handle, or an explicit `?all=1` — the everyone feed comes from the appview.
 const route = useRoute()
 const router = useRouter()
 const { did, handle, isLoggedIn } = useAtprotoLogin()
@@ -37,14 +36,11 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref<string | null>(null)
 const shownHandle = ref<string | null>(null)
-// The DID the shown repo actually resolves to. `requested` holds the raw search string (a
-// handle when you type one), which never equals a `did:` — so ownership is judged against the
-// resolved DID, not the string. Null in the everyone feed.
+// `requested` holds the raw search string, which never equals a `did:`, so ownership is
+// judged against the resolved DID rather than the string. Null in the everyone feed.
 const shownDid = ref<string | null>(null)
 
-// The search box. Suggestions come from the network — the public appview's typeahead over
-// every atproto handle — so someone else's recordings are findable without knowing their
-// handle by heart. A free-typed handle still works: the list is a shortcut, not a gate.
+// A free-typed handle still works: the suggestion list is a shortcut, not a gate.
 const SUGGEST_DEBOUNCE_MS = 180
 
 const search = ref("")
@@ -54,8 +50,8 @@ const activeIndex = ref(-1)
 
 let suggestTimer: ReturnType<typeof setTimeout> | undefined
 let suggestAbort: AbortController | undefined
-// The box is written to programmatically too (seeded from the repo in focus); only a real
-// keystroke should reopen the list, so suggesting is driven from the input event.
+// The box is also written to programmatically (seeded from the repo in focus), and only a
+// real keystroke should reopen the list — so suggesting is driven from the input event.
 const runSuggest = async (query: string) => {
   suggestAbort?.abort()
   const controller = new AbortController()
@@ -103,8 +99,8 @@ const pick = (suggestion: ActorSuggestion) => {
   goToHandle(suggestion.handle)
 }
 
-// Enter with a highlighted row takes that row; with none it takes what is typed, so a handle
-// the appview has never indexed is still reachable.
+// Enter with no row highlighted takes what is typed, so a handle the appview has never
+// indexed is still reachable.
 const submitSearch = () => {
   const highlighted = suggestOpen.value ? suggestions.value[activeIndex.value] : undefined
   if (highlighted) {
@@ -114,9 +110,8 @@ const submitSearch = () => {
   goToHandle(search.value.trim())
 }
 
-// Arrows cycle through the rows and back out to "nothing highlighted", so holding ArrowUp
-// returns you to what you typed instead of trapping you in the list. Slot 0 is that
-// no-selection state, slots 1..n are the rows.
+// Slot 0 is the no-selection state, slots 1..n are the rows: arrows cycle back out to what
+// you typed instead of trapping you in the list.
 const moveActive = (step: number) => {
   if (!suggestions.value.length) return
   if (!suggestOpen.value) {
@@ -132,8 +127,8 @@ onUnmounted(() => {
   suggestAbort?.abort()
 })
 
-// A monotonic token: a slower earlier load must never overwrite a newer scope's results,
-// and the everyone feed has no actor to compare, so a counter covers both scopes.
+// A monotonic token: a slower earlier load must never overwrite a newer scope's results, and
+// the everyone feed has no actor to compare against.
 let loadSeq = 0
 
 const detailOf = (result: { detail?: string }) => result.detail
@@ -199,8 +194,7 @@ const loadMore = async () => {
 }
 
 const syncSearch = () => {
-  // Show the handle in focus, not the raw DID — a repo opened by ?did= still reads back as
-  // its handle once resolved. The everyone feed leaves the box empty.
+  // A repo opened by ?did= still reads back as its handle once resolved.
   search.value = mode.value === "repo" ? (shownHandle.value ?? requested.value) : ""
   suggestions.value = []
   closeSuggestions()
@@ -238,10 +232,8 @@ const publishedOn = (recording: ListenRecording) => {
 const titleOf = (recording: ListenRecording) =>
   recording.value.title || recording.note?.title || "Untitled recording"
 
-// Deleting your own recordings, with friction. deleteRecord only ever touches the caller's
-// own repo, so the controls only render on your own recordings (`isOwnRepo`). The friction is
-// a typed confirmation: opening the panel is not enough — you have to type "delete" before the
-// permanent button unlocks, so a stray tap on a phone can't erase a take.
+// The permanent button unlocks only once "delete" is typed, so a stray tap on a phone cannot
+// erase a take.
 const CONFIRM_WORD = "delete"
 
 const confirmingUri = ref<string | null>(null)
@@ -554,17 +546,13 @@ const confirmDelete = async (recording: ListenRecording) => {
   border-radius: 3px;
 }
 
-/* --hw-rule (14% ink) is a hairline for panel edges — 1.38:1 on white, far under the 3:1
-   WCAG asks of a control's boundary, so it does not read as something you can type in.
-   45% ink puts the border at 3.22:1. The fill is --link-accent rather than --hw-pink-deep
-   (4.93:1 under white text) — style.css already pins it to 48% lightness, which lands
-   white-on-accent at 7.18:1. */
+/* --hw-rule (14% ink) is 1.38:1 on white, under the 3:1 WCAG asks of a control's boundary;
+   45% ink puts it at 3.22:1. The fill is --link-accent, pinned to 48% lightness in style.css,
+   which lands white-on-accent at 7.18:1. */
 .search {
   margin: 0 0 2rem;
 }
 
-/* Field and button read as one control: the border, radius and focus ring live on the
-   wrapper, and the two children inside are borderless, split by a single divider. */
 .search-field {
   position: relative;
   display: flex;
@@ -671,9 +659,9 @@ const confirmDelete = async (recording: ListenRecording) => {
   color: var(--hw-surface);
 }
 
-/* Flush against the wrapper's inner edge: no border of its own, and a radius one pixel
-   tighter than the wrapper's so the fill follows the rounded corner instead of overshooting
-   it. Clipping with overflow on the wrapper is not an option — it would cut the suggestions. */
+/* A radius one pixel tighter than the wrapper's, so the fill follows the rounded corner
+   instead of overshooting it. Clipping with overflow on the wrapper would cut the
+   suggestions. */
 .search-go {
   flex: none;
   font: inherit;
@@ -692,8 +680,8 @@ const confirmDelete = async (recording: ListenRecording) => {
   background: color-mix(in oklch, var(--link-accent) 88%, var(--hw-ink));
 }
 
-/* The wrapper already draws a ring on :focus-within, but that does not say which of the two
-   children has the keyboard, so the button keeps an inset ring of its own. */
+/* The wrapper's :focus-within ring does not say which of the two children has the keyboard,
+   so the button keeps an inset ring of its own. */
 .search-go:focus-visible {
   outline: 2px solid var(--hw-surface);
   outline-offset: -4px;
@@ -818,8 +806,6 @@ const confirmDelete = async (recording: ListenRecording) => {
   border-top: 1px solid var(--hw-rule);
 }
 
-/* Icon-only trash sits inline in the take head, so it borrows no extra row. Kept quiet at
-   rest (ink-faint) and turning pink on hover, matching the note-link accent elsewhere. */
 .delete-open {
   display: inline-flex;
   align-items: center;

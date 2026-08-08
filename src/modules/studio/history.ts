@@ -1,25 +1,16 @@
-// Undo for the derush pass. The EDL is a plain object and every edit returns a new one,
-// so the whole undo stack is a list of past values — no command objects, no inverse
-// operations, nothing to keep in sync with the editing functions (plan: "do not ship
-// destructive derush without undo").
-//
-// Redo is deliberately absent: the operations are cheap to redo by hand and a redo stack
-// is one more thing to invalidate on the next edit.
-
 export interface History<T> {
   present: T
   past: T[]
 }
 
-/** How far back undo reaches. Snapshots are small; this is a memory guard, not a policy. */
+/** Snapshots are small, so this is a memory guard rather than a policy on how far undo goes. */
 export const HISTORY_LIMIT = 100
 
 export const historyOf = <T>(present: T): History<T> => ({ present, past: [] })
 
 /**
- * Record a new present. An edit that changed nothing (the same object back) is not worth
- * an undo step — rejecting an empty region would otherwise leave the user pressing undo
- * against a stack of no-ops.
+ * An edit that changed nothing (the same object back) records no undo step, so rejecting an
+ * empty region does not leave the user pressing undo against a stack of no-ops.
  */
 export const commit = <T>(history: History<T>, next: T, limit = HISTORY_LIMIT): History<T> => {
   if (Object.is(next, history.present)) return history

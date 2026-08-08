@@ -14,12 +14,11 @@ interface UploadRecordingParams {
    */
   mimeType?: string
   /**
-   * The rkey to write the record at, which is the rkey of the note this recording
-   * belongs to. Absent means no note was picked: the PDS assigns a TID and the
-   * recording stands on its own.
+   * The rkey to write at, which is the rkey of the note this recording belongs to. Absent
+   * means no note was picked: the PDS assigns a TID and the recording stands on its own.
    */
   rkey?: string
-  /** Attribution for licences that require it; omitted from the record when empty. */
+  /** Omitted from the record when empty. */
   credits?: RecordingCredit[]
 }
 
@@ -31,10 +30,8 @@ export type UploadRecordingResult =
   | { ok: false; reason: "exception"; detail: string }
 
 /**
- * XRPC errors come back as `{ error, message }`. That body is the only thing
- * that distinguishes BlobTooLarge from InvalidMimeType from an expired token,
- * so it gets surfaced to the user rather than swallowed into a console warning
- * nobody reads on a phone.
+ * The `{ error, message }` body is the only thing distinguishing BlobTooLarge from
+ * InvalidMimeType from an expired token, so it is surfaced to the user.
  */
 const describeFailure = async (response: Response): Promise<string> => {
   const status = response.status
@@ -48,22 +45,13 @@ const describeFailure = async (response: Response): Promise<string> => {
 }
 
 /**
- * Put an audio file in the author's PDS and return the at-uri of the record.
+ * With an `rkey`, putRecord writes at the note's own rkey — that shared rkey *is* the
+ * attachment. Overwriting is wanted: a second cut replaces the first rather than leaving two
+ * recordings and no way to tell which one the note means. Without an rkey, createRecord takes
+ * a PDS-assigned TID.
  *
- * With an `rkey`, putRecord writes the recording at the note's own rkey — that
- * shared rkey *is* the attachment, the only thing that says this audio belongs to
- * that note. Overwriting is the wanted behaviour: a second cut of an episode
- * replaces the first rather than leaving two recordings and no way to tell which
- * one the note means. Without an rkey there is no note to attach to, so
- * createRecord takes a PDS-assigned TID and the caller falls back to pasting the
- * markdown link.
- *
- * The record is written immediately after the upload on purpose: an
- * unreferenced blob is temporary and gets garbage collected, with roughly an
- * hour of grace. The reference cannot wait for the publish cycle.
- *
- * A failed upload leaves nothing behind; a failed write leaves an orphan
- * blob that the PDS collects on its own.
+ * The record is written immediately after the upload because an unreferenced blob is garbage
+ * collected with roughly an hour of grace — the reference cannot wait for the publish cycle.
  */
 export const uploadRecording = async ({
   did,

@@ -15,12 +15,8 @@ import {
 import { snapPoints, snapToNearest } from "../../modules/studio/snap"
 import { formatDuration } from "../../utils/formatDuration"
 
-// The programme at a glance: one clean bar spanning the whole cut, with chapters as ticks
-// and the intro/break/outro music slots as blocks where they land. It exists to place breaks
-// spatially — click the bar to drop a break at that second, drag a block to move it — instead
-// of picking an abstract anchor from the music panel's dropdown. Every gesture writes one
-// slot field through musicSlots.ts and leaves as an `edit`, so this holds no editing state
-// beyond the in-flight drag.
+// Every gesture writes one slot field through musicSlots.ts and leaves as an `edit`, so this
+// holds no editing state beyond the in-flight drag.
 
 const props = defineProps<{
   session: Session
@@ -33,7 +29,7 @@ let counter = 0
 const nextId = () => `slot-${Date.now()}-${(counter += 1)}`
 
 const speechEnd = computed(() => speechDurationSec(props.session))
-// The axis: the whole rendered length, so an outro running past the last word still fits.
+// The whole rendered length, so an outro running past the last word still fits.
 const total = computed(() => Math.max(programmeDurationSec(props.session), speechEnd.value))
 
 const chapterMarks = computed(() =>
@@ -62,17 +58,14 @@ const slotBlocks = computed<SlotBlock[]>(() =>
 
 const points = computed(() => snapPoints(props.session, props.analyses))
 
-// Two evenly spaced gridlines, purely to give the eye a scale without clutter.
 const gridPct = ["33.33%", "66.66%"]
-
-// ── geometry ──────────────────────────────────────────────────────────────────────────
 
 const track = ref<HTMLElement | null>(null)
 
 const pct = (sec: number): string => (total.value > 0 ? `${(sec / total.value) * 100}%` : "0%")
-// A block holds a drag handle and a remove button, so it never shrinks below the 24 px
-// WCAG 2.2 calls the minimum target: at 0.5rem a 4 s break on a 40 min cut was 8 px wide
-// and its × was clipped out of the block entirely. Above that the width is honest.
+// A block holds a drag handle and a remove button, so it never shrinks below the 24 px WCAG
+// 2.2 calls the minimum target — at 0.5rem, a 4 s break on a 40 min cut was 8 px wide and its
+// × was clipped out of the block entirely.
 const blockWidth = (lengthSec: number): string =>
   total.value > 0 ? `max(1.5rem, ${(lengthSec / total.value) * 100}%)` : "1.5rem"
 
@@ -82,8 +75,8 @@ const rectSecAt = (clientX: number): number => {
   return Math.max(0, Math.min(total.value, ((clientX - rect.left) / rect.width) * total.value))
 }
 
-// Snap tolerance is a fixed pixel reach converted to seconds, so it feels the same at every
-// zoom and on every cut length.
+// A fixed pixel reach converted to seconds, so snapping feels the same at every zoom and on
+// every cut length.
 const snapSec = (sec: number): number => {
   const rect = track.value?.getBoundingClientRect()
   const tol = rect && rect.width > 0 ? (7 / rect.width) * total.value : 0.1
@@ -93,15 +86,12 @@ const snapSec = (sec: number): number => {
 const blockAtSec = (block: SlotBlock): number =>
   dragging.value?.slotId === block.id ? dragging.value.atSec : block.atSec
 
-// A slot is hit if the second is within its span, padded by the snap reach so a thin block is
-// still grabbable.
+// Padded by the snap reach, so a thin block is still grabbable.
 const slotHit = (sec: number): SlotBlock | undefined => {
   const rect = track.value?.getBoundingClientRect()
   const pad = rect && rect.width > 0 ? (7 / rect.width) * total.value : 0.1
   return slotBlocks.value.find((s) => sec >= s.atSec - pad && sec <= s.atSec + s.lengthSec + pad)
 }
-
-// ── gestures ──────────────────────────────────────────────────────────────────────────
 
 const dragging = ref<{ slotId: string; atSec: number } | null>(null)
 let active = false
@@ -144,8 +134,8 @@ const onUp = (event: PointerEvent) => {
   track.value?.releasePointerCapture(event.pointerId)
 
   if (dragging.value) {
-    // Dragging anchors the slot absolutely — the author has said "here", not "wherever this
-    // chapter ends up". Re-pin it to the second under the pointer.
+    // Dragging anchors the slot absolutely: the author said "here", not "wherever this
+    // chapter ends up".
     emit(
       "edit",
       updateSlot(props.session, dragging.value.slotId, {
@@ -155,7 +145,7 @@ const onUp = (event: PointerEvent) => {
     dragging.value = null
     return
   }
-  // A click on open bar drops a break there. Only a click, never the tail of a stray drag.
+  // Only a click, never the tail of a stray drag.
   if (!downOnSlot && !moved) addBreakAt(snapSec(downSec))
 }
 
@@ -263,7 +253,6 @@ const onRemove = (slotId: string) => emit("edit", removeSlot(props.session, slot
   touch-action: none;
   overflow: hidden;
 }
-/* The speech runs as a quiet band the full height; music blocks sit over it. */
 .speech {
   position: absolute;
   top: 0;
@@ -295,8 +284,8 @@ const onRemove = (slotId: string) => emit("edit", removeSlot(props.session, slot
   align-items: center;
   justify-content: space-between;
   gap: 0.2rem;
-  /* No padding on the block itself: at its 24 px minimum the whole block is the × and
-     any inset would push the button past the clipping edge. The label carries its own. */
+  /* At its 24 px minimum the whole block is the ×, and any inset would push the button past
+     the clipping edge. The label carries its own padding. */
   padding: 0;
   /* So the label can be dropped when the block is too narrow to hold both it and the ×. */
   container-type: inline-size;
@@ -317,10 +306,8 @@ const onRemove = (slotId: string) => emit("edit", removeSlot(props.session, slot
 .slot.outro {
   background: var(--hw-leaf);
 }
-/* The block clips what does not fit, and the label is what gives way: at 24 px wide a
-   nowrap "BREAK" took the whole block and pushed the × out of sight, leaving a slot that
-   could not be removed from the bar at all. Now the × keeps its corner and the label
-   takes what is left — or nothing, on a block only wide enough for the button. */
+/* The label gives way, not the ×: at 24 px wide a nowrap "BREAK" took the whole block and
+   pushed the × out of sight, leaving a slot that could not be removed from the bar at all. */
 .tag {
   flex: 0 1 auto;
   min-width: 0;
@@ -333,17 +320,16 @@ const onRemove = (slotId: string) => emit("edit", removeSlot(props.session, slot
   white-space: nowrap;
   pointer-events: none;
 }
-/* Under ~4 characters of room the label is unreadable anyway, and it paints over the ×
-   because padding does not shrink. Below that width the block is just the button. */
+/* Under ~4 characters the label is unreadable and paints over the ×, since padding does not
+   shrink. */
 @container (max-width: 56px) {
   .tag {
     display: none;
   }
 }
-/* The glyph is 14 px, the target is not: it stretches to the block's full height and to
-   24 px across, which is the WCAG 2.2 AA minimum. A block on a 44 px bar cannot also be
-   44 px tall — the comfortable target for removing a slot is the "Remove" button in the
-   music panel, which is what makes the smaller one here allowed rather than a shortfall. */
+/* The glyph is 14 px, the target is not: it stretches to the block's full height and 24 px
+   across, the WCAG 2.2 AA minimum. A block on a 44 px bar cannot also be 44 px tall; the
+   comfortable target for removing a slot is the music panel's "Remove" button. */
 .x {
   position: absolute;
   top: 0;

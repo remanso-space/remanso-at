@@ -4,11 +4,10 @@ import { defineConfig } from "vitest/config"
 
 import pkg from "./package.json" with { type: "json" }
 
-// Vitest config lives on its own, apart from vite.config.ts, on purpose: vitest
-// bundles vite 7's types while this app runs vite 8 (rolldown), so a `test` block on
-// vite 8's config type-errors under vue-tsc. This file is excluded from every tsconfig
-// (vue-tsc never typechecks it) and vitest transpiles it with esbuild at runtime, so the
-// cross-version type clash never surfaces. Keep vite.config.ts free of test config.
+// Apart from vite.config.ts on purpose: vitest bundles vite 7's types while this app runs
+// vite 8 (rolldown), so a `test` block on vite 8's config type-errors under vue-tsc. This
+// file is excluded from every tsconfig and vitest transpiles it with esbuild at runtime, so
+// the clash never surfaces. Keep vite.config.ts free of test config.
 export default defineConfig({
   plugins: [vue()],
   // Mirrors vite.config.ts so components reading the version mount under test.

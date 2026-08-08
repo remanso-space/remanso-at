@@ -1,15 +1,12 @@
 import { RECORDING_COLLECTION } from "./recording.types"
 import { getActiveSession } from "vue-atproto-login"
 
-// The other half of the studio: a recording written to the author's PDS can be taken back
-// off it. deleteRecord is authenticated and only ever touches the caller's own repo — the
-// PDS rejects a delete against any DID but the session's — so /listen only offers this on
-// your own recordings, and the button carries its own typed-confirmation friction.
+// deleteRecord is authenticated and the PDS rejects a delete against any DID but the
+// session's, so /listen only offers this on your own recordings.
 
 interface DeleteRecordingParams {
   /** The signed-in author's DID; the session is looked up from it. */
   did: string
-  /** rkey of the recording record to remove. */
   rkey: string
 }
 
@@ -31,8 +28,7 @@ const describeFailure = async (response: Response): Promise<string> => {
 }
 
 /**
- * Delete one recording record from the author's own PDS. Idempotent by nature of
- * deleteRecord: removing an rkey that is already gone still returns ok. The audio blob it
+ * Idempotent: removing an rkey that is already gone still returns ok. The audio blob it
  * referenced becomes unreferenced and the PDS garbage-collects it on its own.
  */
 export const deleteRecording = async ({

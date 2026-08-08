@@ -4,21 +4,15 @@ import type { Session } from "./edl.types"
 import { cueClipsFromSlots, programmeDurationSec } from "./musicSlots"
 import { downmixToMono, resampleLinear } from "./pcm"
 
-// The browser-coupled edges of the render: decode a recorded take to mono PCM at the
-// session rate, and encode the finished programme to Opus. Both mirror the proven
-// mediabunny usage in remanso.space's normalizeAudioFile.ts (same version), narrowed to
-// what the studio needs. canEncodeAudio("opus") is the studio's single point of failure —
-// there is no original to fall back to — so it is checked at session start and refused
-// clearly. Unit tests cannot exercise WebCodecs in jsdom; this is verified in the app.
+// The browser-coupled edges of the render. WebCodecs is unavailable in jsdom, so nothing here
+// is unit-tested — it is verified in the app.
 
 const MIN_BITRATE = 32_000
 const SIZE_SAFETY = 0.9
 
 /**
- * What the music slots are carrying, which sets how much bitrate the encode wants.
- * Speech-only Opus is transparent at 64 kbps; a short intro barely moves it; music under
- * much of the episode is broadband and asks for 128. Higher bitrate is fewer minutes under
- * the 50 MB blob ceiling — the tension the studio surfaces once a slot is filled.
+ * Speech-only Opus is transparent at 64 kbps; music is broadband and asks for 128. Higher
+ * bitrate means fewer minutes under the 50 MB blob ceiling.
  */
 export type ContentTier = "speech" | "occasional-cue" | "music-heavy"
 
@@ -29,9 +23,8 @@ const PREFERRED_BITRATE: Record<ContentTier, number> = {
 }
 
 /**
- * A bitrate that lands the encode under the 50 MB blob ceiling, preferring the tier's
- * target and dropping only when duration forces it. `tier` defaults to speech-only, so the
- * slice-4 caller is unchanged.
+ * A bitrate that lands the encode under the 50 MB blob ceiling, preferring the tier's target
+ * and dropping only when duration forces it.
  */
 export const bitrateFor = (durationSec: number, tier: ContentTier = "speech"): number => {
   const preferred = PREFERRED_BITRATE[tier]
@@ -45,9 +38,8 @@ export const minutesAtTier = (tier: ContentTier): number =>
   Math.floor((MAX_RECORDING_BYTES * 8 * SIZE_SAFETY) / PREFERRED_BITRATE[tier] / 60)
 
 /**
- * The tier the music puts the encode in. Nothing playing → speech. Slots covering under a
- * quarter of the programme → occasional-cue; more than that → music-heavy. Measured on the
- * projected clips, so a slot whose chapter anchor no longer resolves costs nothing.
+ * Measured on the projected clips, so a slot whose chapter anchor no longer resolves costs
+ * nothing.
  */
 export const contentTier = (session: Session): ContentTier => {
   const clips = cueClipsFromSlots(session)
@@ -108,11 +100,7 @@ export interface DecodedTake {
   durationSec: number
 }
 
-/**
- * Decode a recorded take to mono at the target rate, streaming so an hour of audio is
- * never fully resident twice. Each decoded buffer is downmixed and resampled, then the
- * pieces are joined once at the end.
- */
+/** Streamed, so an hour of audio is never fully resident twice. */
 export const decodeTakeToMono = async (
   file: File,
   targetRate: number,
@@ -150,9 +138,8 @@ export interface EncodedRecording {
 }
 
 /**
- * Encode a mono programme to Opus in a WebM container and hand back a File ready for
- * uploadBlob. The AudioBuffer is built with its standalone constructor, so no AudioContext
- * is created; samples are fed in windows to respect encoder backpressure.
+ * The AudioBuffer is built with its standalone constructor, so no AudioContext is created;
+ * samples are fed in windows to respect encoder backpressure.
  */
 export const encodeOpus = async (
   mono: Float32Array,

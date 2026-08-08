@@ -7,8 +7,7 @@ import { useRecordingState } from "./useRecordingState"
 
 /**
  * Ordered by playback reach, not encoder quality. Safari below 18.4 cannot play WebM/Opus,
- * so an MP4/AAC take plays on every browser — take it whenever the recorder can produce it.
- * Firefox only offers WebM or Ogg and lands further down. (Kept verbatim from remanso.)
+ * so an MP4/AAC take plays on every browser; Firefox only offers WebM or Ogg.
  */
 const MIME_CANDIDATES = [
   "audio/mp4;codecs=mp4a.40.2",
@@ -24,8 +23,8 @@ const EXTENSION_BY_CONTAINER: Record<string, string> = {
   ogg: "ogg",
 }
 
-// The take is an intermediate now, re-encoded at render, so capture at a higher rate than
-// remanso's 48k deliverable — headroom for the chain to work with (plan: capture changes).
+// The take is an intermediate, re-encoded at render, so capture above the 48k deliverable
+// rate to leave the chain headroom.
 const AUDIO_BITS_PER_SECOND = 96_000
 
 const MIC_STORAGE_KEY = "remanso:studio:mic"
@@ -72,12 +71,8 @@ export const useTakeRecorder = () => {
     event.returnValue = ""
   }
 
-  // Two flags, two keys, no timing. The plan proposed one button with tap = mark and
-  // double-tap = retake; the double-tap loses. It cannot resolve a tap until the window
-  // expires, so the mark you feel you placed lands late, and a second tap that misses the
-  // window silently becomes two marks — in the one moment of the session where you have
-  // no attention to spare for checking. Two targets cost one more button and are
-  // unambiguous at any speed. F marks, R condemns the line just said.
+  // Two keys, no timing: a double-tap cannot resolve until its window expires, so the mark
+  // lands late and a tap that misses the window silently becomes two marks.
   const onFlagKey = (event: KeyboardEvent) => {
     if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return
     const target = event.target as HTMLElement | null
@@ -114,8 +109,8 @@ export const useTakeRecorder = () => {
       return await navigator.mediaDevices.getUserMedia({ audio: constraint })
     } catch (err) {
       const name = (err as Error)?.name
-      // A stale saved device that has since unplugged: fall back to the default mic
-      // rather than dead-ending. Anything else (NotFound, insecure context) is fatal.
+      // A stale saved device that has since unplugged: fall back to the default mic rather
+      // than dead-ending. Anything else (NotFound, insecure context) is fatal.
       if (deviceId.value && (name === "OverconstrainedError" || name === "NotFoundError")) {
         return navigator.mediaDevices.getUserMedia({ audio: true })
       }
@@ -206,7 +201,7 @@ export const useTakeRecorder = () => {
     return true
   }
 
-  /** F = mark this spot, R = that line was bad. Appended at take time, never timeline time. */
+  /** Appended at take time, never timeline time. */
   const flag = (kind: Marker["kind"] = "mark") => {
     if (!isRecording.value) return
     flags.value = [...flags.value, { atTakeSec: elapsedSec.value, kind }]
@@ -218,10 +213,9 @@ export const useTakeRecorder = () => {
     const durationSec = (performance.now() - startedAt) / 1000
     const opfsPath = writer.path
 
-    // Everything past this point has to reach teardown. It is what clears the global
-    // recording flag, and that flag gates the update toast for the whole app — a stop that
-    // throws halfway (an already-inactive recorder rejects `stop()`) would otherwise wedge
-    // the flag true and silently suppress the toast for the rest of the session.
+    // Everything past this point has to reach teardown, which clears the global recording
+    // flag. A stop that throws halfway (an already-inactive recorder rejects `stop()`) would
+    // wedge that flag true and suppress the update toast for the rest of the session.
     try {
       if (rec.state !== "inactive") {
         const stopped = new Promise<void>((resolve) => {
@@ -274,9 +268,8 @@ export const useTakeRecorder = () => {
     isRecording.value = false
     setRecording(false)
     levels.value = Array.from({ length: LEVEL_BARS }, () => 0)
-    // Back to 0:00 with the meters. A frozen clock reads as "still running, just stalled",
-    // and the next take's length is the only thing that counter can honestly show. The
-    // take's own durationSec is measured in stop() before this, so nothing is lost.
+    // Back to 0:00 with the meters; a frozen clock reads as "still running, just stalled".
+    // The take's own durationSec is measured in stop() before this, so nothing is lost.
     elapsedSec.value = 0
   }
 

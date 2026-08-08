@@ -1,6 +1,5 @@
-// The browser-mode harness serves its own blank page, so nothing the app's index.html
-// does applies. The stylesheet is the whole point of these tests — every --hw-* token and
-// every @media rule lives in it — so it is loaded here for all of them.
+// The harness serves its own blank page, so nothing the app's index.html does applies. Every
+// --hw-* token and @media rule lives in the stylesheet, so it is loaded here for all of them.
 import "../style.css"
 
 // index.html paints the page background; the harness page is transparent white otherwise.
